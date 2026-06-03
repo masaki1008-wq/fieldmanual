@@ -1,0 +1,1346 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>FieldManual — 現場動画マニュアル</title>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#f4f3ef; --bg2:#ffffff; --bg3:#eceae4; --bg4:#e2e0d8;
+  --border:#dddbd2; --border2:#c8c6bc;
+  --text:#18180f; --text2:#64635a; --text3:#a8a79e;
+  --accent:#e84d00; --accent-l:#fff0ea; --accent-d:#c23f00;
+  --green:#1a9e5c; --green-l:#e6f9f0;
+  --amber:#d97b00; --amber-l:#fff8e6;
+  --blue:#1a5fe0; --blue-l:#eaf0ff;
+  --r:12px; --r-lg:18px; --r-xl:24px;
+  --sidebar:260px; --font:'Noto Sans JP',sans-serif;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+  --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.05);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{
+  font-family:var(--font);background:var(--bg);color:var(--text);
+  /* lock viewport on mobile to prevent scroll bounce */
+  position:fixed;width:100%;height:100%;
+  display:flex;
+}
+
+/* ── SIDEBAR (desktop only) ── */
+.sidebar{
+  width:var(--sidebar);min-width:var(--sidebar);
+  background:var(--text);color:#fff;
+  display:none;flex-direction:column;
+  height:100%;overflow:hidden;flex-shrink:0;
+}
+@media(min-width:768px){.sidebar{display:flex}}
+.sidebar-logo{padding:22px 20px 18px;border-bottom:1px solid rgba(255,255,255,.08)}
+.logo-mark{font-size:18px;font-weight:700;letter-spacing:-.5px}
+.logo-mark em{color:var(--accent);font-style:normal}
+.logo-sub{font-size:10px;color:rgba(255,255,255,.35);margin-top:3px;letter-spacing:.5px}
+.sidebar-nav{flex:1;padding:12px 10px;overflow-y:auto}
+.nav-label{font-size:10px;color:rgba(255,255,255,.3);letter-spacing:1px;padding:16px 10px 6px}
+.nav-btn{
+  display:flex;align-items:center;gap:10px;
+  width:100%;padding:10px 12px;border-radius:10px;border:none;
+  background:transparent;color:rgba(255,255,255,.65);
+  font-size:13px;font-family:var(--font);font-weight:500;
+  cursor:pointer;text-align:left;transition:all .15s;
+}
+.nav-btn:hover{background:rgba(255,255,255,.08);color:#fff}
+.nav-btn.active{background:var(--accent);color:#fff}
+.nav-count{
+  margin-left:auto;font-size:11px;font-weight:700;
+  background:rgba(255,255,255,.12);border-radius:20px;
+  padding:1px 7px;min-width:20px;text-align:center;
+}
+.nav-btn.active .nav-count{background:rgba(255,255,255,.25)}
+.sidebar-user{
+  border-top:1px solid rgba(255,255,255,.08);
+  padding:14px 16px;display:flex;align-items:center;gap:10px;
+}
+.user-av{
+  width:34px;height:34px;border-radius:50%;
+  background:var(--accent);display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;color:#fff;flex-shrink:0;
+}
+.user-name{font-size:13px;color:#fff;font-weight:500}
+.user-role{font-size:11px;color:rgba(255,255,255,.35)}
+
+/* ── MAIN PANEL ── */
+.main-panel{flex:1;display:flex;flex-direction:column;height:100%;overflow:hidden;min-width:0}
+
+/* ── TOPBAR ── */
+.topbar{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:0 14px;height:56px;
+  display:flex;align-items:center;gap:10px;
+  flex-shrink:0;z-index:20;
+}
+.tb-hamburger{
+  width:38px;height:38px;border-radius:10px;
+  background:var(--bg3);border:none;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+@media(min-width:768px){.tb-hamburger{display:none!important}}
+.tb-back{
+  width:38px;height:38px;border-radius:50%;
+  background:var(--bg3);border:none;cursor:pointer;
+  font-size:18px;color:var(--text);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+}
+.tb-title{font-size:15px;font-weight:700;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tb-actions{display:flex;gap:6px;align-items:center}
+
+/* ── BUTTONS ── */
+.btn{
+  padding:8px 13px;border-radius:10px;border:none;
+  font-size:13px;font-family:var(--font);font-weight:500;
+  cursor:pointer;white-space:nowrap;transition:all .15s;
+  display:inline-flex;align-items:center;gap:5px;
+}
+.btn-accent{background:var(--accent);color:#fff}
+.btn-accent:active{opacity:.82;transform:scale(.97)}
+.btn-ghost{background:var(--bg3);color:var(--text2);border:1px solid var(--border)}
+.btn-ghost:active{opacity:.75}
+.btn-sm{padding:6px 11px;font-size:12px}
+
+/* ── SCREENS ──
+   Each screen fills the entire main panel.
+   Only .active is shown. */
+.screen{display:none;flex:1;flex-direction:column;overflow:hidden;height:100%}
+.screen.active{display:flex}
+
+/* Scrollable body */
+.sb{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 15px calc(76px + var(--safe-b))}
+
+/* ── HOME ── */
+.stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:22px}
+.stat-card{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:13px 11px;box-shadow:var(--shadow);
+}
+.stat-val{font-size:24px;font-weight:700;letter-spacing:-1px}
+.sv-o{color:var(--accent)}.sv-g{color:var(--green)}.sv-b{color:var(--blue)}
+.stat-label{font-size:10px;color:var(--text3);margin-top:4px;font-weight:500;line-height:1.3}
+@media(min-width:768px){.stat-val{font-size:30px}.stat-card{padding:18px 20px}.stat-label{font-size:11px}}
+.sec-title{font-size:13px;font-weight:700;color:var(--text2);margin-bottom:12px}
+.manual-list{display:flex;flex-direction:column;gap:11px}
+@media(min-width:768px){.manual-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:14px}}
+.manual-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);
+  overflow:hidden;cursor:pointer;box-shadow:var(--shadow);
+  transition:transform .15s;-webkit-user-select:none;user-select:none;
+}
+.manual-card:active{transform:scale(.98);opacity:.9}
+@media(min-width:768px){.manual-card:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,0,0,.1)}}
+.mc-top{padding:15px 15px 11px;display:flex;align-items:center;gap:12px}
+.mc-icon{width:42px;height:42px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0}
+.mc-info{flex:1;min-width:0}
+.mc-name{font-size:14px;font-weight:700;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mc-meta{font-size:11px;color:var(--text3)}
+.mc-chev{font-size:20px;color:var(--text3);flex-shrink:0}
+.mc-prog{padding:0 15px 13px}
+.prog-bar{height:4px;background:var(--bg3);border-radius:2px;overflow:hidden;margin-bottom:5px}
+.prog-fill{height:100%;border-radius:2px}
+.prog-lbl{display:flex;justify-content:space-between;font-size:11px;color:var(--text3)}
+.mc-chips{display:flex;gap:5px;padding:0 15px 13px;flex-wrap:wrap}
+.chip{font-size:11px;font-weight:500;padding:3px 9px;border-radius:20px}
+.chip-done{background:var(--green-l);color:var(--green)}
+.chip-todo{background:var(--bg3);color:var(--text3)}
+
+/* ── STEPS SCREEN ──
+   Mobile: single column (hero + step list)
+   PC: two columns (left: hero+list | right: step detail) */
+.steps-body{flex:1;display:flex;overflow:hidden}
+.steps-left{display:flex;flex-direction:column;overflow:hidden;flex:1}
+@media(min-width:768px){.steps-left{flex:none;width:320px;min-width:320px;border-right:1px solid var(--border)}}
+.steps-right{display:none;flex:1;overflow:hidden}
+@media(min-width:768px){.steps-right{display:flex;flex-direction:column}}
+
+.manual-hero{
+  background:var(--bg2);border-bottom:1px solid var(--border);
+  padding:15px;flex-shrink:0;
+}
+.hero-top{display:flex;align-items:center;gap:11px;margin-bottom:11px}
+.hero-icon{font-size:26px}
+.hero-name{font-size:15px;font-weight:700}
+.hero-dept{font-size:11px;color:var(--text3);margin-top:2px}
+.hero-pb{height:5px;background:var(--bg3);border-radius:3px;overflow:hidden;margin-bottom:5px}
+.hero-pf{height:100%;border-radius:3px}
+.hero-pl{font-size:11px;color:var(--text2)}
+
+.steps-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:10px 10px calc(80px + var(--safe-b))}
+
+.step-row{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r);
+  padding:13px;margin-bottom:7px;cursor:pointer;
+  display:flex;align-items:flex-start;gap:11px;
+  -webkit-user-select:none;user-select:none;transition:all .12s;
+}
+.step-row:active{opacity:.78;transform:scale(.99)}
+.step-row.selected{border-color:var(--accent);background:var(--accent-l)}
+@media(min-width:768px){.step-row:hover{border-color:var(--border2);background:#fafaf8}}
+.step-num{
+  width:30px;height:30px;border-radius:8px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:700;flex-shrink:0;
+}
+.sn-done{background:var(--green-l);color:var(--green)}
+.sn-todo{background:var(--bg3);color:var(--text3)}
+.step-row-info{flex:1;min-width:0}
+.step-row-name{font-size:14px;font-weight:700;margin-bottom:3px}
+.step-row-meta{font-size:11px;color:var(--text3)}
+.step-badge{font-size:10px;font-weight:700;padding:3px 8px;border-radius:20px;flex-shrink:0;align-self:center}
+.sb-done{background:var(--green-l);color:var(--green)}
+.sb-todo{background:var(--bg3);color:var(--text3)}
+.step-chev{font-size:18px;color:var(--text3);align-self:center;flex-shrink:0}
+@media(min-width:768px){.step-chev{display:none}}
+
+.conn-dot{width:2px;height:11px;background:var(--border2);margin:-1px 0 -1px 19px;border-radius:1px}
+
+.add-step-row{
+  border:2px dashed var(--border2);border-radius:var(--r);
+  padding:15px;text-align:center;cursor:pointer;
+  color:var(--text2);font-size:14px;font-weight:500;margin-top:4px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:transparent;-webkit-user-select:none;user-select:none;
+  transition:background .12s;
+}
+.add-step-row:active{background:var(--bg3)}
+
+/* ── STEP DETAIL (shared between mobile screen & PC right pane) ── */
+.step-detail-scroll{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px 15px calc(80px + var(--safe-b));
+}
+@media(min-width:768px){.step-detail-scroll{padding-bottom:24px}}
+.sd-empty{
+  height:100%;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:12px;color:var(--text3);text-align:center;padding:20px;
+}
+
+.sd-hdr{display:flex;align-items:flex-start;gap:12px;margin-bottom:20px}
+.sd-num{
+  width:36px;height:36px;border-radius:10px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;background:var(--accent-l);color:var(--accent);
+}
+.sd-title{font-size:17px;font-weight:700;margin-bottom:4px}
+.sd-desc{font-size:13px;color:var(--text2);line-height:1.6}
+
+.video-block{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r-lg);overflow:hidden;margin-bottom:16px;box-shadow:var(--shadow);
+}
+.video-thumb{
+  height:190px;background:#18180f;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;
+  cursor:pointer;position:relative;
+}
+.video-thumb-emoji{font-size:44px;opacity:.4}
+.play-btn{
+  width:56px;height:56px;border-radius:50%;position:absolute;
+  background:rgba(255,255,255,.18);border:2px solid rgba(255,255,255,.5);
+  display:flex;align-items:center;justify-content:center;font-size:22px;cursor:pointer;
+}
+.play-btn:active{background:rgba(255,255,255,.3)}
+.video-meta{
+  padding:11px 15px;display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+}
+.video-dur{font-size:13px;font-weight:700}
+.video-acts{display:flex;gap:7px}
+.transcript-block{padding:13px 15px 15px}
+.transcript-lbl{font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px;margin-bottom:7px}
+.transcript-text{
+  font-size:13px;color:var(--text);line-height:1.8;
+  padding:12px;background:var(--bg3);border-radius:8px;
+  outline:none;min-height:72px;
+  -webkit-user-select:text;user-select:text;
+}
+.transcript-text:focus{background:#fff;outline:2px solid var(--accent);border-radius:8px}
+
+.record-cta{
+  background:var(--bg2);border:2px dashed var(--border2);border-radius:var(--r-lg);
+  padding:30px 18px;text-align:center;cursor:pointer;margin-bottom:15px;
+  -webkit-user-select:none;user-select:none;transition:all .12s;
+}
+.record-cta:active{background:var(--accent-l);border-color:var(--accent)}
+@media(min-width:768px){.record-cta:hover{background:var(--accent-l);border-color:var(--accent)}}
+.rc-icon{font-size:38px;margin-bottom:10px}
+.rc-title{font-size:15px;font-weight:700;margin-bottom:3px}
+.rc-sub{font-size:12px;color:var(--text3)}
+
+.step-acts{display:flex;gap:7px;margin-bottom:15px;flex-wrap:wrap}
+
+/* ── RECORDER ── */
+.rec-bg{background:#000;color:#fff;flex:1;display:flex;flex-direction:column}
+.rec-tb{
+  height:56px;padding:0 14px;flex-shrink:0;
+  display:flex;align-items:center;gap:12px;
+  background:rgba(0,0,0,.9);
+}
+.rec-back{
+  width:38px;height:38px;border-radius:50%;flex-shrink:0;
+  background:rgba(255,255,255,.12);border:none;color:#fff;
+  display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;
+}
+.rec-back:active{background:rgba(255,255,255,.25)}
+.rec-lbl{font-size:13px;font-weight:700;flex:1;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rec-frame{
+  flex:1;background:#111;position:relative;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:8px;overflow:hidden;
+}
+.rec-grid{
+  position:absolute;inset:0;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.03) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(255,255,255,.03) 1px,transparent 1px);
+  background-size:33.33% 33.33%;
+}
+.rec-corner{position:absolute;width:22px;height:22px;border-color:rgba(255,255,255,.5);border-style:solid;pointer-events:none}
+.c-tl{top:20px;left:20px;border-width:2px 0 0 2px}
+.c-tr{top:20px;right:20px;border-width:2px 2px 0 0}
+.c-bl{bottom:20px;left:20px;border-width:0 0 2px 2px}
+.c-br{bottom:20px;right:20px;border-width:0 2px 2px 0}
+.rec-pill{
+  position:absolute;top:14px;left:50%;transform:translateX(-50%);
+  background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);
+  border-radius:20px;padding:5px 16px;font-size:11px;font-weight:700;
+  white-space:nowrap;max-width:80%;overflow:hidden;text-overflow:ellipsis;
+}
+.rec-badge{
+  position:absolute;top:14px;right:14px;
+  background:rgba(200,0,0,.9);border-radius:20px;
+  padding:4px 11px;font-size:11px;font-weight:700;
+  display:flex;align-items:center;gap:5px;opacity:0;transition:opacity .3s;
+}
+.rec-badge.show{opacity:1}
+.rec-dot-anim{width:7px;height:7px;background:#fff;border-radius:50%;animation:blink .8s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.rec-timer{
+  position:absolute;top:46px;left:50%;transform:translateX(-50%);
+  font-size:38px;font-weight:700;letter-spacing:3px;
+  font-variant-numeric:tabular-nums;
+  opacity:0;transition:opacity .3s;text-shadow:0 2px 12px rgba(0,0,0,.5);
+}
+.rec-timer.show{opacity:1}
+.rec-ph{font-size:62px;opacity:.1;pointer-events:none}
+.rec-hint{font-size:13px;color:rgba(255,255,255,.4);pointer-events:none}
+.rec-tx{
+  position:absolute;bottom:0;left:0;right:0;padding:22px 15px 14px;
+  background:linear-gradient(transparent,rgba(0,0,0,.86));
+  font-size:13px;color:rgba(255,255,255,.88);line-height:1.7;
+  opacity:0;transition:opacity .3s;pointer-events:none;
+}
+.rec-tx.show{opacity:1}
+.rec-controls{
+  background:#0a0a0a;flex-shrink:0;
+  padding:18px 0 calc(24px + var(--safe-b));
+  display:flex;align-items:center;justify-content:center;gap:44px;
+}
+.rec-side{
+  width:54px;height:54px;border-radius:50%;
+  background:rgba(255,255,255,.1);border:none;color:#fff;
+  font-size:22px;cursor:pointer;display:flex;align-items:center;justify-content:center;
+  flex-direction:column;gap:3px;transition:background .12s;
+}
+.rec-side:active{background:rgba(255,255,255,.22)}
+.rec-side-lbl{font-size:10px;color:rgba(255,255,255,.4)}
+.rec-main{
+  width:76px;height:76px;border-radius:50%;
+  border:4px solid #fff;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;transition:transform .2s;
+}
+.rec-main:active{transform:scale(.93)}
+.rec-main-inner{width:56px;height:56px;border-radius:50%;background:var(--accent);transition:all .22s}
+.rec-main.recording .rec-main-inner{border-radius:10px;width:32px;height:32px}
+
+/* ── PREVIEW ── */
+.pv-video{
+  background:#000;flex-shrink:0;height:220px;
+  display:flex;align-items:center;justify-content:center;flex-direction:column;gap:12px;
+  position:relative;overflow:hidden;
+}
+@media(min-width:768px){.pv-video{flex:1;height:auto;min-height:260px}}
+.pv-emoji{font-size:50px;opacity:.38}
+.waveform{display:flex;align-items:flex-end;gap:4px;height:42px}
+.wv{width:5px;border-radius:3px;background:rgba(255,255,255,.3);animation:wav .9s ease-in-out infinite alternate}
+.wv:nth-child(1){height:30%;animation-delay:0s}.wv:nth-child(2){height:70%;animation-delay:.1s}
+.wv:nth-child(3){height:100%;animation-delay:.2s}.wv:nth-child(4){height:55%;animation-delay:.15s}
+.wv:nth-child(5){height:85%;animation-delay:.05s}.wv:nth-child(6){height:45%;animation-delay:.25s}
+.wv:nth-child(7){height:75%;animation-delay:.1s}.wv:nth-child(8){height:35%;animation-delay:.2s}
+.wv:nth-child(9){height:90%;animation-delay:.05s}.wv:nth-child(10){height:60%;animation-delay:.15s}
+@keyframes wav{to{height:100%}}
+.pv-dur{font-size:12px;color:rgba(255,255,255,.4)}
+.pv-form{
+  flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  padding:16px 15px;background:var(--bg2);
+}
+@media(min-width:768px){.pv-form{width:380px;min-width:380px;flex:none;border-left:1px solid var(--border)}}
+.pv-title{font-size:16px;font-weight:700;margin-bottom:3px}
+.pv-sub{font-size:12px;color:var(--text3);margin-bottom:16px}
+.pv-tx-lbl{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:7px;display:flex;align-items:center;gap:8px}
+.ai-badge{font-size:10px;background:var(--green-l);color:var(--green);padding:2px 8px;border-radius:20px;font-weight:700}
+.pv-tx{
+  background:var(--bg3);border-radius:10px;padding:13px;
+  font-size:13px;line-height:1.8;color:var(--text);
+  min-height:90px;outline:none;margin-bottom:16px;
+  -webkit-user-select:text;user-select:text;
+}
+.pv-tx:focus{background:#fff;outline:2px solid var(--accent);border-radius:10px}
+.pv-btns{display:flex;gap:9px;padding-bottom:calc(10px + var(--safe-b))}
+.pv-btns .btn{flex:1;justify-content:center;padding:13px;font-size:14px}
+
+/* ── PUBLISH ── */
+.pub-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:18px 15px calc(80px + var(--safe-b))}
+.pub-card{
+  background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-xl);
+  padding:22px;box-shadow:var(--shadow);margin-bottom:14px;
+}
+.pub-icon{font-size:46px;text-align:center;margin-bottom:12px}
+.pub-title{font-size:20px;font-weight:700;text-align:center;margin-bottom:7px}
+.pub-sub{font-size:13px;color:var(--text2);text-align:center;line-height:1.6;margin-bottom:18px}
+.pub-row{display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid var(--border)}
+.pub-row:last-child{border-bottom:none}
+.pub-row-icon{font-size:17px;width:28px;text-align:center}
+.pub-row-info{flex:1}
+.pub-row-name{font-size:13px;font-weight:500}
+.pub-row-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.pub-warn{
+  background:var(--amber-l);border:1px solid #f0c070;border-radius:var(--r);
+  padding:11px 13px;font-size:12px;color:var(--amber);margin-bottom:12px;
+}
+.btn-pub{
+  width:100%;padding:14px;border-radius:14px;border:none;
+  font-size:15px;font-family:var(--font);font-weight:700;cursor:pointer;margin-bottom:9px;
+}
+.btn-pub:active{opacity:.82}
+.bpa{background:var(--accent);color:#fff}
+.bpg{background:var(--bg3);color:var(--text2)}
+
+/* ── SHEET ── */
+.sheet-ov{
+  position:fixed;inset:0;background:rgba(0,0,0,.5);
+  z-index:500;display:none;align-items:flex-end;justify-content:center;
+}
+.sheet-ov.show{display:flex}
+.sheet-box{
+  background:var(--bg2);border-radius:var(--r-xl) var(--r-xl) 0 0;
+  width:100%;padding:18px 18px calc(18px + var(--safe-b));
+  max-height:92dvh;overflow-y:auto;-webkit-overflow-scrolling:touch;
+  animation:sUp .22s ease;
+}
+@keyframes sUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@media(min-width:768px){
+  .sheet-ov{align-items:center}
+  .sheet-box{border-radius:var(--r-xl);width:460px;max-height:88dvh;animation:sFade .18s ease}
+  @keyframes sFade{from{opacity:0;transform:scale(.97)}to{opacity:1;transform:scale(1)}}
+}
+.sheet-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 18px}
+.sheet-title{font-size:17px;font-weight:700;margin-bottom:17px}
+.inp-g{margin-bottom:13px}
+.inp-lbl{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:6px;display:block}
+.inp-f{
+  width:100%;background:var(--bg3);border:1.5px solid var(--border);border-radius:12px;
+  padding:12px 13px;font-size:max(16px,1em);font-family:var(--font);
+  color:var(--text);outline:none;
+}
+.inp-f:focus{border-color:var(--accent);background:#fff}
+.inp-f::placeholder{color:var(--text3)}
+.icon-grid{display:flex;gap:9px;flex-wrap:wrap}
+.icon-opt{
+  width:48px;height:48px;border-radius:12px;border:2px solid var(--border);
+  background:var(--bg3);display:flex;align-items:center;justify-content:center;
+  font-size:24px;cursor:pointer;transition:all .12s;
+}
+.icon-opt.sel{border-color:var(--accent);background:var(--accent-l)}
+.icon-opt:active{transform:scale(.88)}
+.sheet-btns{display:flex;flex-direction:column;gap:8px;margin-top:11px}
+.btn-s{
+  width:100%;padding:14px;border-radius:12px;border:none;
+  font-size:15px;font-family:var(--font);font-weight:700;cursor:pointer;
+}
+.btn-s:active{opacity:.8}
+.bsa{background:var(--accent);color:#fff}
+.bsg{background:var(--bg3);color:var(--text2)}
+
+/* ── FAB (mobile) ── */
+.fab{
+  position:fixed;right:16px;bottom:calc(16px + var(--safe-b));
+  width:56px;height:56px;border-radius:50%;
+  background:var(--accent);border:none;color:#fff;font-size:26px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  box-shadow:0 4px 20px rgba(232,77,0,.4);z-index:100;
+  -webkit-user-select:none;user-select:none;transition:transform .15s;
+}
+.fab:active{transform:scale(.91)}
+@media(min-width:768px){.fab{display:none!important}}
+
+/* ── DRAWER (mobile nav) ── */
+.drawer-ov{position:fixed;inset:0;z-index:600;display:none}
+.drawer-ov.show{display:block}
+.drawer-bd{position:absolute;inset:0;background:rgba(0,0,0,.5)}
+.drawer-panel{
+  position:absolute;top:0;left:0;bottom:0;
+  width:min(var(--sidebar),85vw);
+  background:var(--text);display:flex;flex-direction:column;
+  animation:dIn .22s ease;overflow:hidden;
+}
+@keyframes dIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+
+/* ── TOAST ── */
+.toast{
+  position:fixed;bottom:calc(76px + var(--safe-b));left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:rgba(24,24,15,.92);color:#fff;
+  padding:10px 18px;border-radius:20px;font-size:13px;font-weight:500;
+  white-space:nowrap;max-width:90vw;overflow:hidden;text-overflow:ellipsis;
+  opacity:0;transition:all .22s;z-index:999;pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+::-webkit-scrollbar{width:4px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+</style>
+</head>
+<body>
+
+<!-- DESKTOP SIDEBAR -->
+<aside class="sidebar" id="desktop-sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-mark">Field<em>Manual</em></div>
+    <div class="logo-sub">現場動画マニュアルシステム</div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-label">メニュー</div>
+    <button class="nav-btn active" id="snav-home" onclick="goHome()">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+      ホーム
+    </button>
+    <button class="nav-btn" onclick="showSheet('sheet-new')">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+      新規マニュアル
+    </button>
+    <div class="nav-label" style="margin-top:8px">マニュアル</div>
+    <div id="sb-manuals"></div>
+  </nav>
+  <div class="sidebar-user">
+    <div class="user-av">田</div>
+    <div><div class="user-name">田中 花子</div><div class="user-role">コンテンツ作成者</div></div>
+  </div>
+</aside>
+
+<!-- MAIN PANEL -->
+<div class="main-panel">
+
+  <!-- TOPBAR -->
+  <div class="topbar" id="topbar">
+    <button class="tb-hamburger" onclick="openDrawer()">
+      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+    </button>
+    <span class="tb-title" id="tb-title">FieldManual</span>
+    <div class="tb-actions" id="tb-acts">
+      <button class="btn btn-accent" onclick="showSheet('sheet-new')">＋ 新規</button>
+    </div>
+  </div>
+
+  <!-- SCREEN: HOME -->
+  <div class="screen active" id="screen-home">
+    <div class="sb">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-val sv-o" id="st-m">3</div><div class="stat-label">作成中のマニュアル</div></div>
+        <div class="stat-card"><div class="stat-val sv-g" id="st-d">5</div><div class="stat-label">録画済み工程</div></div>
+        <div class="stat-card"><div class="stat-val sv-b">1</div><div class="stat-label">公開済み</div></div>
+      </div>
+      <div class="sec-title">マニュアル一覧</div>
+      <div class="manual-list" id="manual-list"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN: STEPS LIST + PC right pane -->
+  <div class="screen" id="screen-steps">
+    <div class="steps-body">
+      <!-- Left column: hero + list -->
+      <div class="steps-left">
+        <div class="manual-hero" id="steps-hero"></div>
+        <div class="steps-scroll" id="steps-scroll"></div>
+      </div>
+      <!-- Right column (PC only) -->
+      <div class="steps-right" id="steps-right">
+        <div class="step-detail-scroll" id="pc-detail">
+          <div class="sd-empty">
+            <div style="font-size:46px;opacity:.18">🎥</div>
+            <div style="font-size:13px">← 工程を選択すると<br>詳細と動画が表示されます</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: STEP DETAIL (mobile only) -->
+  <div class="screen" id="screen-step-detail">
+    <div class="step-detail-scroll" id="mob-detail"></div>
+  </div>
+
+  <!-- SCREEN: RECORDER -->
+  <div class="screen" id="screen-recorder">
+    <div class="rec-bg">
+      <div class="rec-tb">
+        <button class="rec-back" onclick="cancelRec()">←</button>
+        <div class="rec-lbl" id="rec-lbl">工程を録画</div>
+      </div>
+      <div class="rec-frame">
+        <!-- Live camera feed -->
+        <video id="rec-video" autoplay playsinline muted
+          style="position:absolute;inset:0;width:100%;height:100%;object-fit:cover;display:none"></video>
+        <!-- Overlays (sit above video) -->
+        <div class="rec-grid" style="pointer-events:none;z-index:1"></div>
+        <div class="rec-corner c-tl" style="z-index:2"></div>
+        <div class="rec-corner c-tr" style="z-index:2"></div>
+        <div class="rec-corner c-bl" style="z-index:2"></div>
+        <div class="rec-corner c-br" style="z-index:2"></div>
+        <div class="rec-pill" id="rec-pill" style="z-index:3">STEP 1</div>
+        <div class="rec-badge" id="rec-badge" style="z-index:3"><div class="rec-dot-anim"></div>REC</div>
+        <div class="rec-timer" id="rec-timer" style="z-index:3">00:00</div>
+        <!-- Shown before camera starts -->
+        <div id="rec-ph" style="z-index:2;display:flex;flex-direction:column;align-items:center;gap:12px">
+          <div style="font-size:56px;opacity:.18">📷</div>
+          <div id="rec-hint" style="font-size:13px;color:rgba(255,255,255,.45)">カメラを起動しています...</div>
+        </div>
+        <!-- Error message -->
+        <div id="rec-err" style="display:none;z-index:4;text-align:center;padding:24px;color:rgba(255,255,255,.8)">
+          <div style="font-size:40px;margin-bottom:12px">⚠️</div>
+          <div id="rec-err-msg" style="font-size:14px;line-height:1.6"></div>
+        </div>
+        <div class="rec-tx" id="rec-tx" style="z-index:3"></div>
+      </div>
+      <div class="rec-controls">
+        <div>
+          <button class="rec-side" id="btn-flip" onclick="flipCamera()">🔄<div class="rec-side-lbl">切替</div></button>
+        </div>
+        <button class="rec-main" id="rec-main" onclick="toggleRec()">
+          <div class="rec-main-inner"></div>
+        </button>
+        <div>
+          <button class="rec-side" id="btn-torch" onclick="toggleTorch()">💡<div class="rec-side-lbl">ライト</div></button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: PREVIEW -->
+  <div class="screen" id="screen-preview">
+    <div style="display:flex;flex-direction:column;flex:1;overflow:hidden" id="pv-wrap">
+      <div class="pv-video" style="position:relative">
+        <!-- Recorded video playback -->
+        <video id="pv-video" controls playsinline
+          style="width:100%;height:100%;object-fit:contain;display:none;background:#000"></video>
+        <!-- Fallback when no blob yet -->
+        <div id="pv-fallback" style="display:flex;flex-direction:column;align-items:center;gap:12px">
+          <div class="pv-emoji">🎬</div>
+          <div class="waveform">
+            <div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div>
+            <div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div><div class="wv"></div>
+          </div>
+        </div>
+        <div class="pv-dur" id="pv-dur" style="position:absolute;bottom:10px;left:50%;transform:translateX(-50%)">録画時間: 0:00</div>
+      </div>
+      <div class="pv-form">
+        <div class="pv-title" id="pv-step">工程名</div>
+        <div class="pv-sub">文字起こしを確認・修正してから保存してください</div>
+        <div class="pv-tx-lbl">📝 文字起こし（タップして編集）<span class="ai-badge">AI完了</span></div>
+        <div class="pv-tx" contenteditable="true" id="pv-tx">まず最初に安全帽とグローブを着用してください。次に、機械の電源スイッチが完全にOFFになっているか確認します。確認後、安全ロックをかけてから作業を開始してください。</div>
+        <div class="pv-btns">
+          <button class="btn btn-ghost" onclick="retake()">撮り直す</button>
+          <button class="btn btn-accent" onclick="saveStep()">この工程を保存 ✓</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN: PUBLISH -->
+  <div class="screen" id="screen-publish">
+    <div class="pub-scroll">
+      <div class="pub-card" id="pub-pre">
+        <div class="pub-icon">📋</div>
+        <div class="pub-title" id="pub-name">マニュアル名</div>
+        <div class="pub-sub">全工程の動画をまとめてマニュアルとして公開します。社内の全メンバーが閲覧できるようになります。</div>
+        <div id="pub-steps"></div>
+      </div>
+      <div class="pub-warn" id="pub-warn" style="display:none">⚠ 動画が未録画の工程があります。後から追加も可能です。</div>
+      <button class="btn-pub bpa" id="pub-btn" onclick="doPublish()">マニュアルを公開する 🚀</button>
+      <div style="text-align:center;font-size:12px;color:var(--text3);margin-bottom:20px">公開後も動画の追加・修正が可能です</div>
+      <div class="pub-card" id="pub-done" style="display:none">
+        <div class="pub-icon">🎉</div>
+        <div class="pub-title">公開完了！</div>
+        <div class="pub-sub">「<span id="pub-done-name"></span>」が公開されました。</div>
+        <button class="btn-pub bpa" style="margin-top:14px" onclick="showToast('共有リンクをコピーしました 📋')">リンクをコピー</button>
+        <button class="btn-pub bpg" onclick="goHome()">ホームに戻る</button>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /main-panel -->
+
+<!-- FAB -->
+<button class="fab" onclick="showSheet('sheet-new')">＋</button>
+
+<!-- MOBILE DRAWER -->
+<div class="drawer-ov" id="drawer">
+  <div class="drawer-bd" onclick="closeDrawer()"></div>
+  <div class="drawer-panel">
+    <div class="sidebar-logo">
+      <div class="logo-mark">Field<em>Manual</em></div>
+      <div class="logo-sub">現場動画マニュアルシステム</div>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">メニュー</div>
+      <button class="nav-btn active" onclick="goHome();closeDrawer()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        ホーム
+      </button>
+      <button class="nav-btn" onclick="showSheet('sheet-new');closeDrawer()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        新規マニュアル
+      </button>
+      <div class="nav-label" style="margin-top:8px">マニュアル</div>
+      <div id="drawer-manuals"></div>
+    </nav>
+    <div class="sidebar-user">
+      <div class="user-av">田</div>
+      <div><div class="user-name">田中 花子</div><div class="user-role">コンテンツ作成者</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: New Manual -->
+<div class="sheet-ov" id="sheet-new" onclick="if(event.target===this)hideSheet('sheet-new')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">新しいマニュアルを作成</div>
+    <div class="inp-g"><label class="inp-lbl">マニュアル名 *</label><input class="inp-f" id="inp-name" type="text" placeholder="例：機械メンテナンス手順" autocomplete="off"></div>
+    <div class="inp-g"><label class="inp-lbl">部門・カテゴリ</label><input class="inp-f" id="inp-dept" type="text" placeholder="例：製造部・設備管理" autocomplete="off"></div>
+    <div class="inp-g">
+      <label class="inp-lbl">アイコン</label>
+      <div class="icon-grid">
+        <div class="icon-opt sel" onclick="selIcon(this,'🏭')">🏭</div>
+        <div class="icon-opt" onclick="selIcon(this,'📦')">📦</div>
+        <div class="icon-opt" onclick="selIcon(this,'🔧')">🔧</div>
+        <div class="icon-opt" onclick="selIcon(this,'⚡')">⚡</div>
+        <div class="icon-opt" onclick="selIcon(this,'🛡️')">🛡️</div>
+        <div class="icon-opt" onclick="selIcon(this,'📋')">📋</div>
+        <div class="icon-opt" onclick="selIcon(this,'🚛')">🚛</div>
+        <div class="icon-opt" onclick="selIcon(this,'🧹')">🧹</div>
+      </div>
+    </div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" onclick="createManual()">作成して工程を追加 →</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-new')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: Add Step -->
+<div class="sheet-ov" id="sheet-step" onclick="if(event.target===this)hideSheet('sheet-step')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">工程を追加</div>
+    <div class="inp-g"><label class="inp-lbl">工程名 *</label><input class="inp-f" id="inp-sname" type="text" placeholder="例：安全確認・保護具の着用" autocomplete="off"></div>
+    <div class="inp-g"><label class="inp-lbl">説明（任意）</label><input class="inp-f" id="inp-sdesc" type="text" placeholder="ポイントや注意事項" autocomplete="off"></div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" onclick="addStepRec()">追加してすぐ録画 🎥</button>
+      <button class="btn-s bsg" onclick="addStepOnly()">動画なしで追加</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-step')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ── DATA ── */
+const manuals=[
+  {id:0,name:'設備点検・清掃マニュアル',icon:'🏭',dept:'製造部',color:'var(--accent)',
+   steps:[
+    {name:'準備・安全確認',desc:'保護具の着用・危険区域の確認',status:'done',dur:'0:42',
+     transcript:'まず安全帽とグローブを着用します。危険区域の表示を確認し立入禁止テープを設置してください。'},
+    {name:'機器の電源OFF',desc:'主電源を落としてロックアウト施錠',status:'done',dur:'1:15',
+     transcript:'主電源スイッチをOFFにした後、ロックアウトタグを取り付けます。複数電源はすべて確認してください。'},
+    {name:'内部清掃',desc:'エアブロー・ウエスによる清掃',status:'done',dur:'3:20',
+     transcript:'エアブローで内部のホコリを除去します。油汚れには専用クリーナーを使用してください。'},
+    {name:'動作確認',desc:'清掃後の動作テストと記録',status:'todo',dur:null,transcript:null},
+   ]},
+  {id:1,name:'出荷前検品フロー',icon:'📦',dept:'物流部',color:'var(--green)',
+   steps:[
+    {name:'数量確認',desc:'発注書との照合',status:'done',dur:'1:05',
+     transcript:'発注書と現物の数量を1点ずつ照合します。差異がある場合は赤いシールで表示してください。'},
+    {name:'外観検査',desc:'傷・汚れ・変形のチェック',status:'todo',dur:null,transcript:null},
+    {name:'梱包・ラベル貼付',desc:'梱包基準に沿った封入',status:'todo',dur:null,transcript:null},
+   ]},
+  {id:2,name:'機械トラブル時の対処手順',icon:'🔧',dept:'設備管理部',color:'var(--blue)',
+   steps:[
+    {name:'異常の確認',desc:'エラーコードと症状の記録',status:'todo',dur:null,transcript:null},
+    {name:'電源遮断',desc:'安全な手順での緊急停止',status:'todo',dur:null,transcript:null},
+    {name:'周囲の安全確保',desc:'立入禁止区域の設定',status:'todo',dur:null,transcript:null},
+    {name:'担当者への連絡',desc:'報告フォームへの入力',status:'todo',dur:null,transcript:null},
+    {name:'復旧確認',desc:'正常稼働の確認と記録',status:'todo',dur:null,transcript:null},
+   ]},
+];
+
+let curM=0,curS=null,isRec=false,recSec=0,recInt=null,txPh=0;
+let selIco='🏭';
+const isMobile=()=>window.innerWidth<768;
+const TX=[
+  'まず最初に安全帽とグローブを着用してください...',
+  '次に機械の電源スイッチがOFFになっているか確認します...',
+  '確認後、安全ロックをかけてから作業を開始してください。'
+];
+
+/* ── SCREEN ── */
+function showScreen(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById('screen-'+id).classList.add('active');
+}
+
+/* ── TOPBAR ── */
+let savedBackFn=null;
+function setTB(title,actsHTML,backFn){
+  document.getElementById('tb-title').textContent=title;
+  document.getElementById('tb-acts').innerHTML=actsHTML||'';
+  // remove old back btn
+  const old=document.getElementById('_tb_back');
+  if(old)old.remove();
+  const hbg=document.querySelector('.tb-hamburger');
+  savedBackFn=backFn||null;
+  if(backFn){
+    const b=document.createElement('button');
+    b.id='_tb_back';b.className='tb-back';b.textContent='←';
+    b.onclick=backFn;
+    hbg.after(b);
+    hbg.style.display='none';
+  } else {
+    hbg.style.display='';
+  }
+}
+
+/* ── HOME ── */
+function goHome(){
+  setTB('FieldManual','<button class="btn btn-accent" onclick="showSheet(\'sheet-new\')">＋ 新規</button>',null);
+  renderHome();showScreen('home');refreshNavLinks();
+}
+
+function renderHome(){
+  const list=document.getElementById('manual-list');list.innerHTML='';
+  manuals.forEach((m,i)=>{
+    const done=m.steps.filter(s=>s.status==='done').length;
+    const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
+    const chips=m.steps.slice(0,3).map(s=>
+      `<span class="chip ${s.status==='done'?'chip-done':'chip-todo'}">${s.status==='done'?'✓':'⬜'} ${s.name}</span>`
+    ).join('');
+    const more=m.steps.length>3?`<span class="chip chip-todo">+${m.steps.length-3}工程</span>`:'';
+    const c=document.createElement('div');
+    c.className='manual-card';
+    c.innerHTML=`
+      <div class="mc-top">
+        <div class="mc-icon" style="background:${m.color}20">${m.icon}</div>
+        <div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-meta">${m.dept} · ${m.steps.length}工程</div></div>
+        <div class="mc-chev">›</div>
+      </div>
+      <div class="mc-prog">
+        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${m.color}"></div></div>
+        <div class="prog-lbl"><span>${done} / ${m.steps.length} 工程完了</span><span>${pct}%</span></div>
+      </div>
+      <div class="mc-chips">${chips}${more}</div>
+    `;
+    c.onclick=()=>openManual(i);
+    list.appendChild(c);
+  });
+  document.getElementById('st-m').textContent=manuals.length;
+  document.getElementById('st-d').textContent=manuals.reduce((a,m)=>a+m.steps.filter(s=>s.status==='done').length,0);
+  refreshNavLinks();
+}
+
+function refreshNavLinks(){
+  ['sb-manuals','drawer-manuals'].forEach(id=>{
+    const el=document.getElementById(id);if(!el)return;
+    el.innerHTML=manuals.map((m,i)=>{
+      const done=m.steps.filter(s=>s.status==='done').length;
+      return `<button class="nav-btn" onclick="openManual(${i});closeDrawer()">
+        <span style="font-size:15px">${m.icon}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${m.name}</span>
+        <span class="nav-count">${done}/${m.steps.length}</span>
+      </button>`;
+    }).join('');
+  });
+}
+
+/* ── MANUAL DETAIL ── */
+function openManual(idx){
+  curM=idx;curS=null;
+  const m=manuals[idx];
+  setTB(m.name,
+    `<button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
+     <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
+    goHome);
+  renderStepsList();
+  showScreen('steps');
+}
+
+function renderStepsList(){
+  const m=manuals[curM];
+  const done=m.steps.filter(s=>s.status==='done').length;
+  const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
+
+  document.getElementById('steps-hero').innerHTML=`
+    <div class="hero-top">
+      <div class="hero-icon">${m.icon}</div>
+      <div><div class="hero-name">${m.name}</div><div class="hero-dept">${m.dept} · ${m.steps.length}工程</div></div>
+    </div>
+    <div class="hero-pb"><div class="hero-pf" style="width:${pct}%;background:${m.color}"></div></div>
+    <div class="hero-pl">${done} / ${m.steps.length} 工程に動画あり (${pct}%)</div>
+  `;
+
+  const area=document.getElementById('steps-scroll');area.innerHTML='';
+  m.steps.forEach((step,i)=>{
+    if(i>0){const d=document.createElement('div');d.className='conn-dot';area.appendChild(d);}
+    const row=document.createElement('div');
+    row.className='step-row'+(curS===i?' selected':'');
+    row.innerHTML=`
+      <div class="step-num ${step.status==='done'?'sn-done':'sn-todo'}">${i+1}</div>
+      <div class="step-row-info">
+        <div class="step-row-name">${step.name}</div>
+        <div class="step-row-meta">${step.status==='done'?'⏱ '+step.dur+' · 録画済み':(step.desc||'未録画')}</div>
+      </div>
+      <div class="step-badge ${step.status==='done'?'sb-done':'sb-todo'}">${step.status==='done'?'✓':'未録画'}</div>
+      <div class="step-chev">›</div>
+    `;
+    row.onclick=()=>selectStep(i);
+    area.appendChild(row);
+  });
+  const add=document.createElement('div');
+  add.className='add-step-row';
+  add.innerHTML='<span style="font-size:17px">＋</span> 工程を追加';
+  add.onclick=()=>showSheet('sheet-step');
+  area.appendChild(add);
+}
+
+/* ── SELECT STEP ── */
+function selectStep(idx){
+  curS=idx;
+  renderStepsList();
+  if(isMobile()){
+    // Full screen on mobile
+    const m=manuals[curM];
+    const step=m.steps[idx];
+    setTB(step.name,'',()=>openManual(curM));
+    renderDetailInto(document.getElementById('mob-detail'),idx);
+    showScreen('step-detail');
+  } else {
+    renderDetailInto(document.getElementById('pc-detail'),idx);
+  }
+}
+
+function renderDetailInto(container,idx){
+  const m=manuals[curM];
+  const step=m.steps[idx];
+  let vid='';
+  if(step.status==='done'){
+    const hasVideo=!!step.videoUrl;
+    vid=`
+      <div class="video-block">
+        <div class="video-thumb" id="vthumb-${idx}" onclick="playStepVideo(${idx})" style="cursor:pointer">
+          <div class="video-thumb-emoji">${m.icon}</div>
+          <div class="play-btn">▶</div>
+        </div>
+        <video id="vplayer-${idx}" controls playsinline
+          style="display:none;width:100%;max-height:220px;background:#000;border-radius:0"
+          ${hasVideo?'src="'+step.videoUrl+'"':''}></video>
+        <div class="video-meta">
+          <span class="video-dur">⏱ ${step.dur}</span>
+          <div class="video-acts">
+            <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})">撮り直す</button>
+            <button class="btn btn-ghost btn-sm" onclick="showToast('リンクをコピーしました')">共有</button>
+          </div>
+        </div>
+        <div class="transcript-block">
+          <div class="transcript-lbl">📝 文字起こし（タップして編集）</div>
+          <div class="transcript-text" contenteditable="true">${step.transcript}</div>
+        </div>
+      </div>
+    `;
+  } else {
+    vid=`
+      <div class="record-cta" onclick="startRec(${idx})">
+        <div class="rc-icon">🎥</div>
+        <div class="rc-title">タップして録画開始</div>
+        <div class="rc-sub">この工程の作業を動画で撮影します</div>
+      </div>
+    `;
+  }
+  container.innerHTML=`
+    <div class="sd-hdr">
+      <div class="sd-num">${idx+1}</div>
+      <div><div class="sd-title">${step.name}</div>${step.desc?`<div class="sd-desc">${step.desc}</div>`:''}</div>
+    </div>
+    ${vid}
+    <div class="step-acts">
+      <button class="btn btn-ghost btn-sm" onclick="moveStep(${idx},-1)">↑ 上へ</button>
+      <button class="btn btn-ghost btn-sm" onclick="moveStep(${idx},1)">↓ 下へ</button>
+      <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})" style="color:var(--accent);font-weight:700">🎥 録画</button>
+      <button class="btn btn-ghost btn-sm" onclick="deleteStep(${idx})" style="color:#c23f00;margin-left:auto">削除</button>
+    </div>
+  `;
+}
+
+function playStepVideo(idx){
+  const thumb=document.getElementById('vthumb-'+idx);
+  const player=document.getElementById('vplayer-'+idx);
+  if(!player) return;
+  if(!player.src&&!manuals[curM].steps[idx].videoUrl){
+    showToast('動画データがありません');return;
+  }
+  if(!player.src) player.src=manuals[curM].steps[idx].videoUrl;
+  thumb.style.display='none';
+  player.style.display='block';
+  player.play();
+}
+
+function moveStep(idx,dir){
+  const m=manuals[curM];const ni=idx+dir;
+  if(ni<0||ni>=m.steps.length){showToast('これ以上移動できません');return;}
+  [m.steps[idx],m.steps[ni]]=[m.steps[ni],m.steps[idx]];
+  curS=ni;renderStepsList();
+  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),ni);
+  showToast('工程の順番を変更しました');
+}
+
+function deleteStep(idx){
+  manuals[curM].steps.splice(idx,1);curS=null;
+  if(isMobile()){openManual(curM);}
+  else{
+    renderStepsList();
+    document.getElementById('pc-detail').innerHTML='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
+  }
+  showToast('工程を削除しました');
+}
+
+/* ── RECORDER (real camera) ── */
+let mediaStream=null, mediaRecorder=null, recChunks=[], recordedBlob=null;
+let facingMode='environment'; // rear camera by default on mobile
+let torchOn=false;
+
+async function startRec(stepIdx){
+  curS=stepIdx; isRec=false; recSec=0; txPh=0;
+  recChunks=[]; recordedBlob=null;
+
+  const m=manuals[curM]; const step=m.steps[stepIdx];
+  document.getElementById('rec-lbl').textContent=m.name+' › '+step.name;
+  document.getElementById('rec-pill').textContent='STEP '+(stepIdx+1)+' · '+step.name;
+  document.getElementById('rec-main').classList.remove('recording');
+  document.getElementById('rec-badge').classList.remove('show');
+  document.getElementById('rec-timer').classList.remove('show');
+  document.getElementById('rec-timer').textContent='00:00';
+  document.getElementById('rec-tx').classList.remove('show');
+  document.getElementById('rec-tx').textContent='';
+  document.getElementById('rec-ph').style.display='flex';
+  document.getElementById('rec-hint').textContent='カメラを起動しています...';
+  document.getElementById('rec-err').style.display='none';
+  document.getElementById('rec-video').style.display='none';
+
+  setTB(step.name,'',cancelRec);
+  showScreen('recorder');
+
+  // Stop any existing stream first
+  stopStream();
+
+  try {
+    // Prefer rear camera on mobile, user-facing on desktop
+    const constraints={
+      video:{
+        facingMode: facingMode,
+        width:{ideal:1280}, height:{ideal:720}
+      },
+      audio:true
+    };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    const vid=document.getElementById('rec-video');
+    vid.srcObject=mediaStream;
+    vid.style.display='block';
+    document.getElementById('rec-ph').style.display='none';
+    document.getElementById('rec-err').style.display='none';
+  } catch(e){
+    showRecError(e);
+  }
+}
+
+function showRecError(e){
+  document.getElementById('rec-ph').style.display='none';
+  document.getElementById('rec-err').style.display='flex';
+  let msg='カメラへのアクセスができませんでした。';
+  if(e.name==='NotAllowedError'||e.name==='PermissionDeniedError'){
+    msg='カメラのアクセスが拒否されています。<br>ブラウザの設定からカメラのアクセスを許可してください。';
+  } else if(e.name==='NotFoundError'){
+    msg='カメラが見つかりません。デバイスにカメラが接続されているか確認してください。';
+  } else if(e.name==='NotSupportedError'||location.protocol==='http:'){
+    msg='カメラを使用するにはHTTPS接続が必要です。<br>https:// でアクセスしてください。';
+  } else {
+    msg='カメラエラー: '+e.message;
+  }
+  document.getElementById('rec-err-msg').innerHTML=msg;
+}
+
+function stopStream(){
+  if(mediaStream){
+    mediaStream.getTracks().forEach(t=>t.stop());
+    mediaStream=null;
+  }
+  torchOn=false;
+}
+
+// Choose best supported MIME type for the device
+function getBestMime(){
+  const types=[
+    'video/mp4;codecs=h264,aac',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  for(const t of types){
+    if(MediaRecorder.isTypeSupported(t)) return t;
+  }
+  return '';
+}
+
+function toggleRec(){
+  if(!mediaStream){
+    showToast('カメラが起動していません');return;
+  }
+  if(!isRec){
+    // START recording
+    isRec=true; recSec=0; recChunks=[];
+    document.getElementById('rec-main').classList.add('recording');
+    document.getElementById('rec-badge').classList.add('show');
+    document.getElementById('rec-timer').classList.add('show');
+
+    const mime=getBestMime();
+    const opts=mime?{mimeType:mime}:{};
+    try{
+      mediaRecorder=new MediaRecorder(mediaStream,opts);
+    } catch(e){
+      mediaRecorder=new MediaRecorder(mediaStream);
+    }
+    mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size>0)recChunks.push(e.data);};
+    mediaRecorder.onstop=onRecordingStop;
+    mediaRecorder.start(1000); // collect data every 1s
+
+    recInt=setInterval(()=>{
+      recSec++;
+      const mm=String(Math.floor(recSec/60)).padStart(2,'0');
+      const ss=String(recSec%60).padStart(2,'0');
+      document.getElementById('rec-timer').textContent=mm+':'+ss;
+      const txEl=document.getElementById('rec-tx');
+      if(recSec===5&&txPh===0){txEl.textContent=TX[0];txEl.classList.add('show');txPh=1;}
+      if(recSec===12&&txPh===1){txEl.textContent=TX[0]+' '+TX[1];txPh=2;}
+      if(recSec===18&&txPh===2){txEl.textContent=TX.join(' ');txPh=3;}
+    },1000);
+  } else {
+    // STOP recording
+    clearInterval(recInt); isRec=false;
+    document.getElementById('rec-main').classList.remove('recording');
+    document.getElementById('rec-badge').classList.remove('show');
+    if(mediaRecorder&&mediaRecorder.state!=='inactive'){
+      mediaRecorder.stop(); // triggers onstop → onRecordingStop
+    }
+  }
+}
+
+function onRecordingStop(){
+  const mime=recChunks.length&&recChunks[0].type?recChunks[0].type:'video/mp4';
+  recordedBlob=new Blob(recChunks,{type:mime});
+  recChunks=[];
+
+  // Build object URL for preview playback
+  const url=URL.createObjectURL(recordedBlob);
+  const pvVid=document.getElementById('pv-video');
+  pvVid.src=url;
+  pvVid.style.display='block';
+  document.getElementById('pv-fallback').style.display='none';
+
+  // Duration display
+  const mm=Math.floor(recSec/60);
+  const ss=String(recSec%60).padStart(2,'0');
+  document.getElementById('pv-dur').textContent='録画時間: '+mm+':'+ss;
+  document.getElementById('pv-step').textContent=manuals[curM].steps[curS].name;
+  document.getElementById('pv-tx').textContent=
+    'まず最初に安全帽とグローブを着用してください。次に、機械の電源スイッチが完全にOFFになっているか確認します。確認後、安全ロックをかけてから作業を開始してください。';
+
+  // Stop live stream (camera off while previewing)
+  stopStream();
+
+  const wrap=document.getElementById('pv-wrap');
+  wrap.style.flexDirection=isMobile()?'column':'row';
+  setTB('プレビュー・文字起こし','',()=>startRec(curS));
+  showScreen('preview');
+}
+
+async function flipCamera(){
+  facingMode=(facingMode==='environment'?'user':'environment');
+  showToast(facingMode==='environment'?'リアカメラに切り替えました':'フロントカメラに切り替えました');
+  // Restart stream with new facing mode
+  await startRec(curS);
+}
+
+async function toggleTorch(){
+  if(!mediaStream) return;
+  const track=mediaStream.getVideoTracks()[0];
+  if(!track) return;
+  try{
+    torchOn=!torchOn;
+    await track.applyConstraints({advanced:[{torch:torchOn}]});
+    document.getElementById('btn-torch').style.opacity=torchOn?'1':'0.5';
+    showToast(torchOn?'ライトをONにしました':'ライトをOFFにしました');
+  } catch(e){
+    showToast('このデバイスではライトを使用できません');
+    torchOn=false;
+  }
+}
+
+function cancelRec(){
+  clearInterval(recInt); isRec=false;
+  if(mediaRecorder&&mediaRecorder.state!=='inactive') mediaRecorder.stop();
+  stopStream();
+  if(isMobile()&&curS!==null){openManual(curM);}
+  else{renderStepsList();showScreen('steps');}
+}
+
+function retake(){
+  // Release preview blob URL
+  const pvVid=document.getElementById('pv-video');
+  if(pvVid.src){URL.revokeObjectURL(pvVid.src);pvVid.src='';pvVid.style.display='none';}
+  document.getElementById('pv-fallback').style.display='flex';
+  startRec(curS);
+}
+
+function saveStep(){
+  const m=manuals[curM]; const step=m.steps[curS];
+  step.status='done';
+  step.dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
+  step.transcript=document.getElementById('pv-tx').textContent.trim();
+  // Store the blob URL for in-app playback
+  const pvVid=document.getElementById('pv-video');
+  if(pvVid.src) step.videoUrl=pvVid.src; // object URL (session only)
+  showToast('「'+step.name+'」を保存しました ✓');
+  const m2=manuals[curM];
+  setTB(m2.name,
+    `<button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
+     <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
+    goHome);
+  renderStepsList();
+  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),curS);
+  showScreen('steps');
+}
+
+/* ── PUBLISH ── */
+function openPublish(){
+  const m=manuals[curM];
+  document.getElementById('pub-name').textContent=m.name;
+  document.getElementById('pub-pre').style.display='block';
+  document.getElementById('pub-done').style.display='none';
+  document.getElementById('pub-btn').style.display='block';
+  document.getElementById('pub-warn').style.display=m.steps.some(s=>s.status!=='done')?'block':'none';
+  const list=document.getElementById('pub-steps');list.innerHTML='';
+  m.steps.forEach((s,i)=>{
+    const r=document.createElement('div');r.className='pub-row';
+    r.innerHTML=`<div class="pub-row-icon">${m.icon}</div>
+      <div class="pub-row-info">
+        <div class="pub-row-name">STEP ${i+1}: ${s.name}</div>
+        <div class="pub-row-meta">${s.status==='done'?'✅ 動画あり · '+s.dur:'⬜ 動画未撮影'}</div>
+      </div>`;
+    list.appendChild(r);
+  });
+  setTB(m.name+' — 公開','',()=>openManual(curM));
+  showScreen('publish');
+}
+
+function doPublish(){
+  document.getElementById('pub-pre').style.display='none';
+  document.getElementById('pub-btn').style.display='none';
+  document.getElementById('pub-done-name').textContent=manuals[curM].name;
+  document.getElementById('pub-done').style.display='block';
+  showToast('マニュアルを公開しました 🎉');
+}
+
+/* ── NEW MANUAL ── */
+function createManual(){
+  const name=document.getElementById('inp-name').value.trim();
+  const dept=document.getElementById('inp-dept').value.trim();
+  if(!name){showToast('マニュアル名を入力してください');return;}
+  const cols=['var(--accent)','var(--green)','var(--blue)','var(--amber)'];
+  manuals.push({id:manuals.length,name,icon:selIco,dept:dept||'未設定',color:cols[manuals.length%cols.length],steps:[]});
+  document.getElementById('inp-name').value='';
+  document.getElementById('inp-dept').value='';
+  hideSheet('sheet-new');
+  curM=manuals.length-1;
+  renderHome();openManual(curM);
+  showToast('マニュアルを作成しました');
+}
+
+/* ── ADD STEP ── */
+function addStepRec(){
+  const name=document.getElementById('inp-sname').value.trim();
+  const desc=document.getElementById('inp-sdesc').value.trim();
+  if(!name){showToast('工程名を入力してください');return;}
+  manuals[curM].steps.push({name,desc,status:'todo',dur:null,transcript:null});
+  const idx=manuals[curM].steps.length-1;
+  document.getElementById('inp-sname').value='';
+  document.getElementById('inp-sdesc').value='';
+  hideSheet('sheet-step');
+  startRec(idx);
+}
+
+function addStepOnly(){
+  const name=document.getElementById('inp-sname').value.trim();
+  const desc=document.getElementById('inp-sdesc').value.trim();
+  if(!name){showToast('工程名を入力してください');return;}
+  manuals[curM].steps.push({name,desc,status:'todo',dur:null,transcript:null});
+  curS=manuals[curM].steps.length-1;
+  document.getElementById('inp-sname').value='';
+  document.getElementById('inp-sdesc').value='';
+  hideSheet('sheet-step');
+  renderStepsList();
+  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),curS);
+  showToast('工程を追加しました');
+}
+
+/* ── ICON ── */
+function selIcon(el,val){
+  document.querySelectorAll('.icon-opt').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');selIco=val;
+}
+
+/* ── SHEETS / DRAWER ── */
+function showSheet(id){document.getElementById(id).classList.add('show');}
+function hideSheet(id){document.getElementById(id).classList.remove('show');}
+function openDrawer(){document.getElementById('drawer').classList.add('show');}
+function closeDrawer(){document.getElementById('drawer').classList.remove('show');}
+
+/* ── TOAST ── */
+let toastT;
+function showToast(msg){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.classList.add('show');
+  clearTimeout(toastT);
+  toastT=setTimeout(()=>t.classList.remove('show'),2600);
+}
+
+/* ── INIT ── */
+renderHome();
+</script>
+</body>
+</html>

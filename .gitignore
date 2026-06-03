@@ -1,0 +1,10 @@
+# 自己署名証明書（セキュリティのためGitに含めない）
+key.pem
+cert.pem
+
+# Node.js
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
