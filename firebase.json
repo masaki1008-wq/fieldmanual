@@ -11,7 +11,9 @@
       "start.bat",
       "start.sh",
       "package.json",
-      "package-lock.json"
+      "package-lock.json",
+      "firestore.rules",
+      "firestore.indexes.json"
     ],
     "rewrites": [
       {
@@ -19,5 +21,23 @@
         "destination": "/index.html"
       }
     ]
+  },
+  "firestore": {
+    "database": "(default)",
+    "location": "asia-northeast1",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "FieldManual",
+        "supportEmail": "masakiokuno56@gmail.com",
+        "authorizedRedirectUris": [
+          "https://fieldmanual-app.web.app",
+          "https://fieldmanual-app.firebaseapp.com"
+        ]
+      }
+    }
   }
 }

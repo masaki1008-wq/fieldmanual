@@ -1,0 +1,25 @@
+rules_version='2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ユーザー情報：本人のみ読み書き可
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // マニュアル：ログイン済みユーザーは全員読み取り可、書き込みは本人のみ
+    match /manuals/{manualId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null
+        && resource.data.createdBy == request.auth.uid;
+
+      // 工程：ログイン済みユーザーは全員読み取り可
+      match /steps/{stepId} {
+        allow read: if request.auth != null;
+        allow write: if request.auth != null;
+      }
+    }
+  }
+}

@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>FieldManual — 現場動画マニュアル</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <style>
 :root {
   --bg:#f4f3ef; --bg2:#ffffff; --bg3:#eceae4; --bg4:#e2e0d8;
@@ -510,6 +514,31 @@ body{
 </head>
 <body>
 
+<!-- LOGIN SCREEN -->
+<div id="login-screen" style="
+  position:fixed;inset:0;z-index:9999;
+  background:var(--bg);display:flex;align-items:center;justify-content:center;
+">
+  <div style="
+    background:#fff;border-radius:24px;padding:40px 32px;
+    box-shadow:0 8px 40px rgba(0,0,0,.12);width:min(360px,90vw);text-align:center;
+  ">
+    <div style="font-size:42px;margin-bottom:12px">📋</div>
+    <div style="font-size:22px;font-weight:700;margin-bottom:6px">Field<span style="color:var(--accent)">Manual</span></div>
+    <div style="font-size:13px;color:var(--text3);margin-bottom:32px">現場動画マニュアルシステム</div>
+    <button id="btn-google-login" onclick="loginWithGoogle()" style="
+      width:100%;padding:14px;border-radius:12px;border:1.5px solid var(--border2);
+      background:#fff;font-size:14px;font-family:var(--font);font-weight:700;
+      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
+      margin-bottom:12px;transition:background .15s;
+    ">
+      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20">
+      Googleでログイン
+    </button>
+    <div style="font-size:11px;color:var(--text3)">社内メンバーのみアクセス可能です</div>
+  </div>
+</div>
+
 <!-- DESKTOP SIDEBAR -->
 <aside class="sidebar" id="desktop-sidebar">
   <div class="sidebar-logo">
@@ -763,36 +792,84 @@ body{
 <div class="toast" id="toast"></div>
 
 <script>
-/* ── DATA ── */
-const manuals=[
-  {id:0,name:'設備点検・清掃マニュアル',icon:'🏭',dept:'製造部',color:'var(--accent)',
-   steps:[
-    {name:'準備・安全確認',desc:'保護具の着用・危険区域の確認',status:'done',dur:'0:42',
-     transcript:'まず安全帽とグローブを着用します。危険区域の表示を確認し立入禁止テープを設置してください。'},
-    {name:'機器の電源OFF',desc:'主電源を落としてロックアウト施錠',status:'done',dur:'1:15',
-     transcript:'主電源スイッチをOFFにした後、ロックアウトタグを取り付けます。複数電源はすべて確認してください。'},
-    {name:'内部清掃',desc:'エアブロー・ウエスによる清掃',status:'done',dur:'3:20',
-     transcript:'エアブローで内部のホコリを除去します。油汚れには専用クリーナーを使用してください。'},
-    {name:'動作確認',desc:'清掃後の動作テストと記録',status:'todo',dur:null,transcript:null},
-   ]},
-  {id:1,name:'出荷前検品フロー',icon:'📦',dept:'物流部',color:'var(--green)',
-   steps:[
-    {name:'数量確認',desc:'発注書との照合',status:'done',dur:'1:05',
-     transcript:'発注書と現物の数量を1点ずつ照合します。差異がある場合は赤いシールで表示してください。'},
-    {name:'外観検査',desc:'傷・汚れ・変形のチェック',status:'todo',dur:null,transcript:null},
-    {name:'梱包・ラベル貼付',desc:'梱包基準に沿った封入',status:'todo',dur:null,transcript:null},
-   ]},
-  {id:2,name:'機械トラブル時の対処手順',icon:'🔧',dept:'設備管理部',color:'var(--blue)',
-   steps:[
-    {name:'異常の確認',desc:'エラーコードと症状の記録',status:'todo',dur:null,transcript:null},
-    {name:'電源遮断',desc:'安全な手順での緊急停止',status:'todo',dur:null,transcript:null},
-    {name:'周囲の安全確保',desc:'立入禁止区域の設定',status:'todo',dur:null,transcript:null},
-    {name:'担当者への連絡',desc:'報告フォームへの入力',status:'todo',dur:null,transcript:null},
-    {name:'復旧確認',desc:'正常稼働の確認と記録',status:'todo',dur:null,transcript:null},
-   ]},
-];
+/* ── FIREBASE 初期化 ── */
+const firebaseConfig = {
+  apiKey: "AIzaSyDKfhwmxTMgQtIfELxhqsgCgse-DPPVOf4",
+  authDomain: "fieldmanual-app.firebaseapp.com",
+  projectId: "fieldmanual-app",
+  storageBucket: "fieldmanual-app.firebasestorage.app",
+  messagingSenderId: "755340272786",
+  appId: "1:755340272786:web:8c76ced9d2d2568f01b24b"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db   = firebase.firestore();
 
-let curM=0,curS=null,isRec=false,recSec=0,recInt=null,txPh=0;
+/* ── AUTH ── */
+let currentUser = null;
+
+async function loginWithGoogle(){
+  const provider = new firebase.auth.GoogleAuthProvider();
+  try {
+    await auth.signInWithPopup(provider);
+  } catch(e) {
+    showToast('ログインに失敗しました: ' + e.message);
+  }
+}
+
+auth.onAuthStateChanged(async user => {
+  currentUser = user;
+  if(user){
+    document.getElementById('login-screen').style.display = 'none';
+    // ユーザー情報をFirestoreに保存
+    await db.collection('users').doc(user.uid).set({
+      email: user.email,
+      displayName: user.displayName,
+      photoURL: user.photoURL,
+      lastLogin: firebase.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+    // サイドバーのユーザー情報を更新
+    const name = user.displayName || user.email;
+    const initials = name.charAt(0).toUpperCase();
+    document.querySelectorAll('.user-av').forEach(el => el.textContent = initials);
+    document.querySelectorAll('.user-name').forEach(el => el.textContent = name);
+    document.querySelectorAll('.user-role').forEach(el => el.textContent = user.email);
+    // マニュアル一覧をFirestoreからリアルタイム取得
+    listenManuals();
+  } else {
+    document.getElementById('login-screen').style.display = 'flex';
+  }
+});
+
+/* ── DATA (Firestore) ── */
+let manuals = [];
+let unsubManuals = null;
+
+function listenManuals(){
+  if(unsubManuals) unsubManuals();
+  unsubManuals = db.collection('manuals')
+    .orderBy('createdAt', 'asc')
+    .onSnapshot(async snapshot => {
+      const manualsWithSteps = [];
+      for(const doc of snapshot.docs){
+        const data = { id: doc.id, ...doc.data(), steps: [] };
+        const stepsSnap = await db.collection('manuals').doc(doc.id)
+          .collection('steps').orderBy('order','asc').get();
+        data.steps = stepsSnap.docs.map(s => ({ id: s.id, ...s.data() }));
+        manualsWithSteps.push(data);
+      }
+      manuals = manualsWithSteps;
+      renderHome();
+      // 現在開いているマニュアルを更新
+      if(curMId) {
+        const idx = manuals.findIndex(m => m.id === curMId);
+        if(idx >= 0){ curM = idx; renderStepsList(); }
+      }
+    });
+}
+
+let curM=0, curMId=null, curS=null, curSId=null;
+let isRec=false,recSec=0,recInt=null,txPh=0;
 let selIco='🏭';
 const isMobile=()=>window.innerWidth<768;
 const TX=[
@@ -881,7 +958,7 @@ function refreshNavLinks(){
 
 /* ── MANUAL DETAIL ── */
 function openManual(idx){
-  curM=idx;curS=null;
+  curM=idx; curMId=manuals[idx].id; curS=null; curSId=null;
   const m=manuals[idx];
   setTB(m.name,
     `<button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
@@ -931,7 +1008,7 @@ function renderStepsList(){
 
 /* ── SELECT STEP ── */
 function selectStep(idx){
-  curS=idx;
+  curS=idx; curSId=manuals[curM].steps[idx].id;
   renderStepsList();
   if(isMobile()){
     // Full screen on mobile
@@ -1010,20 +1087,26 @@ function playStepVideo(idx){
   player.play();
 }
 
-function moveStep(idx,dir){
+async function moveStep(idx,dir){
   const m=manuals[curM];const ni=idx+dir;
   if(ni<0||ni>=m.steps.length){showToast('これ以上移動できません');return;}
-  [m.steps[idx],m.steps[ni]]=[m.steps[ni],m.steps[idx]];
-  curS=ni;renderStepsList();
-  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),ni);
+  // Firestoreで順番を入れ替え
+  const batch = db.batch();
+  const stepA = m.steps[idx];
+  const stepB = m.steps[ni];
+  batch.update(db.collection('manuals').doc(curMId).collection('steps').doc(stepA.id), { order: ni });
+  batch.update(db.collection('manuals').doc(curMId).collection('steps').doc(stepB.id), { order: idx });
+  await batch.commit();
+  curS=ni; curSId=m.steps[ni].id;
   showToast('工程の順番を変更しました');
 }
 
-function deleteStep(idx){
-  manuals[curM].steps.splice(idx,1);curS=null;
+async function deleteStep(idx){
+  const stepId = manuals[curM].steps[idx].id;
+  await db.collection('manuals').doc(curMId).collection('steps').doc(stepId).delete();
+  curS=null; curSId=null;
   if(isMobile()){openManual(curM);}
   else{
-    renderStepsList();
     document.getElementById('pc-detail').innerHTML='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
   }
   showToast('工程を削除しました');
@@ -1227,14 +1310,22 @@ function retake(){
   startRec(curS);
 }
 
-function saveStep(){
+async function saveStep(){
   const m=manuals[curM]; const step=m.steps[curS];
-  step.status='done';
-  step.dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
-  step.transcript=document.getElementById('pv-tx').textContent.trim();
-  // Store the blob URL for in-app playback
+  const dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
+  const transcript=document.getElementById('pv-tx').textContent.trim();
   const pvVid=document.getElementById('pv-video');
-  if(pvVid.src) step.videoUrl=pvVid.src; // object URL (session only)
+  const videoUrl=pvVid.src||null;
+
+  // Firestoreに保存
+  await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+    status: 'done',
+    dur: dur,
+    transcript: transcript,
+    videoUrl: videoUrl,
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+
   showToast('「'+step.name+'」を保存しました ✓');
   const m2=manuals[curM];
   setTB(m2.name,
@@ -1277,44 +1368,57 @@ function doPublish(){
 }
 
 /* ── NEW MANUAL ── */
-function createManual(){
+async function createManual(){
   const name=document.getElementById('inp-name').value.trim();
   const dept=document.getElementById('inp-dept').value.trim();
   if(!name){showToast('マニュアル名を入力してください');return;}
+  if(!currentUser){showToast('ログインが必要です');return;}
   const cols=['var(--accent)','var(--green)','var(--blue)','var(--amber)'];
-  manuals.push({id:manuals.length,name,icon:selIco,dept:dept||'未設定',color:cols[manuals.length%cols.length],steps:[]});
+  const color=cols[manuals.length%cols.length];
+  const ref = await db.collection('manuals').add({
+    name, icon:selIco, dept:dept||'未設定', color,
+    createdBy: currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
   document.getElementById('inp-name').value='';
   document.getElementById('inp-dept').value='';
   hideSheet('sheet-new');
-  curM=manuals.length-1;
-  renderHome();openManual(curM);
+  // 新しいマニュアルを開く
+  const idx = manuals.findIndex(m => m.id === ref.id);
+  if(idx >= 0) openManual(idx);
   showToast('マニュアルを作成しました');
 }
 
 /* ── ADD STEP ── */
-function addStepRec(){
+async function addStepRec(){
   const name=document.getElementById('inp-sname').value.trim();
   const desc=document.getElementById('inp-sdesc').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
-  manuals[curM].steps.push({name,desc,status:'todo',dur:null,transcript:null});
-  const idx=manuals[curM].steps.length-1;
+  const order=manuals[curM].steps.length;
+  const ref = await db.collection('manuals').doc(curMId).collection('steps').add({
+    name, desc, status:'todo', dur:null, transcript:null, videoUrl:null,
+    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
   document.getElementById('inp-sname').value='';
   document.getElementById('inp-sdesc').value='';
   hideSheet('sheet-step');
-  startRec(idx);
+  const idx=manuals[curM].steps.length; // スナップショット更新後のインデックス
+  curSId=ref.id;
+  startRec(order);
 }
 
-function addStepOnly(){
+async function addStepOnly(){
   const name=document.getElementById('inp-sname').value.trim();
   const desc=document.getElementById('inp-sdesc').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
-  manuals[curM].steps.push({name,desc,status:'todo',dur:null,transcript:null});
-  curS=manuals[curM].steps.length-1;
+  const order=manuals[curM].steps.length;
+  await db.collection('manuals').doc(curMId).collection('steps').add({
+    name, desc, status:'todo', dur:null, transcript:null, videoUrl:null,
+    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
   document.getElementById('inp-sname').value='';
   document.getElementById('inp-sdesc').value='';
   hideSheet('sheet-step');
-  renderStepsList();
-  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),curS);
   showToast('工程を追加しました');
 }
 
@@ -1340,7 +1444,7 @@ function showToast(msg){
 }
 
 /* ── INIT ── */
-renderHome();
+// ログイン状態によって自動的にrenderHome()が呼ばれる（onAuthStateChanged）
 </script>
 </body>
 </html>
