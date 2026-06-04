@@ -512,6 +512,59 @@ body{
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
 
+/* ── 作業者閲覧画面 ── */
+.viewer-step{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r-xl);overflow:hidden;margin-bottom:16px;
+  box-shadow:var(--shadow);
+}
+.viewer-step.done{border-color:var(--green);border-width:2px}
+.viewer-step-hdr{
+  display:flex;align-items:center;gap:12px;
+  padding:14px 16px;cursor:pointer;
+  border-bottom:1px solid var(--border);
+}
+.viewer-step-num{
+  width:36px;height:36px;border-radius:10px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;
+  font-size:15px;font-weight:700;background:var(--bg3);color:var(--text2);
+}
+.viewer-step.done .viewer-step-num{background:var(--green-l);color:var(--green)}
+.viewer-step-info{flex:1;min-width:0}
+.viewer-step-name{font-size:15px;font-weight:700}
+.viewer-step-meta{font-size:11px;color:var(--text3);margin-top:2px}
+.viewer-check{
+  width:32px;height:32px;border-radius:50%;border:2px solid var(--border2);
+  background:transparent;display:flex;align-items:center;justify-content:center;
+  font-size:16px;cursor:pointer;flex-shrink:0;transition:all .15s;
+}
+.viewer-step.done .viewer-check{background:var(--green);border-color:var(--green);color:#fff}
+.viewer-body{padding:0}
+.viewer-video-wrap{
+  background:#000;width:100%;
+  height:220px; /* モバイル */
+}
+@media(min-width:768px){.viewer-video-wrap{height:300px}}
+.viewer-video-wrap video{width:100%;height:100%;object-fit:contain}
+.viewer-text-body{
+  padding:16px;font-size:15px;line-height:1.9;
+  color:var(--text);white-space:pre-wrap;
+}
+@media(min-width:768px){.viewer-text-body{font-size:14px}}
+.viewer-files{padding:0 16px 16px;display:flex;flex-direction:column;gap:6px}
+.viewer-file-row{
+  display:flex;align-items:center;gap:10px;
+  padding:10px 12px;background:var(--bg3);border-radius:10px;cursor:pointer;
+}
+.viewer-file-name{flex:1;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* スマホ動画プレビューを大きく */
+@media(max-width:767px){
+  .pv-video{height:260px}
+  .video-thumb{height:240px}
+  .text-manual-area{font-size:15px;min-height:180px}
+}
+
 /* ── 部門・チーム階層 ── */
 .dept-section{margin-bottom:20px}
 .dept-header{
@@ -710,6 +763,24 @@ body{
       </div>
       <div class="sec-title">マニュアル一覧</div>
       <div class="manual-list" id="manual-list"></div>
+    </div>
+  </div>
+
+  <!-- SCREEN: VIEWER（作業者閲覧モード） -->
+  <div class="screen" id="screen-viewer">
+    <div class="sb" id="viewer-scroll">
+      <div id="viewer-progress" style="
+        background:var(--bg2);border:1px solid var(--border);border-radius:var(--r-lg);
+        padding:12px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;
+        box-shadow:var(--shadow);
+      ">
+        <div style="flex:1">
+          <div style="font-size:12px;color:var(--text3);margin-bottom:4px">進捗</div>
+          <div class="prog-bar" style="height:6px"><div class="prog-fill" id="vp-bar" style="width:0%;background:var(--green)"></div></div>
+        </div>
+        <div id="vp-label" style="font-size:13px;font-weight:700;color:var(--green);white-space:nowrap">0 / 0</div>
+      </div>
+      <div id="viewer-steps"></div>
     </div>
   </div>
 
@@ -1380,6 +1451,115 @@ async function moveTeam(deptId, teamId, dir){
   await refreshDepartments();
 }
 
+/* ── 作業者閲覧モード ── */
+let viewerDone = new Set(); // 完了済み工程インデックス
+
+function openViewer(){
+  const m=manuals[curM];
+  viewerDone = new Set();
+  setTB(m.name, '', ()=>openManual(curM));
+  renderViewer();
+  showScreen('viewer');
+}
+
+function renderViewer(){
+  const m=manuals[curM];
+  const steps=m.steps;
+  const doneCount=viewerDone.size;
+  const pct=steps.length?Math.round(doneCount/steps.length*100):0;
+  document.getElementById('vp-bar').style.width=pct+'%';
+  document.getElementById('vp-label').textContent=`${doneCount} / ${steps.length} 完了`;
+
+  const area=document.getElementById('viewer-steps');
+  area.innerHTML='';
+
+  steps.forEach((step,idx)=>{
+    const done=viewerDone.has(idx);
+    const ctype=step.contentType||'video';
+    const showVideo=ctype==='video'||ctype==='both';
+    const showText=ctype==='text'||ctype==='both';
+
+    const card=document.createElement('div');
+    card.className='viewer-step'+(done?' done':'');
+    card.id='vs-'+idx;
+
+    // ヘッダー（タップで折りたたみ）
+    card.innerHTML=`
+      <div class="viewer-step-hdr" onclick="toggleViewerStep(${idx})">
+        <div class="viewer-step-num">${idx+1}</div>
+        <div class="viewer-step-info">
+          <div class="viewer-step-name">${step.name}</div>
+          <div class="viewer-step-meta">${step.desc||''}</div>
+        </div>
+        <div class="viewer-check" onclick="event.stopPropagation();toggleViewerDone(${idx})">${done?'✓':''}</div>
+      </div>
+      <div class="viewer-body" id="vb-${idx}">
+        ${buildViewerBody(step, idx, showVideo, showText)}
+      </div>
+    `;
+    area.appendChild(card);
+  });
+}
+
+function buildViewerBody(step, idx, showVideo, showText){
+  let html='';
+
+  // 動画
+  if(showVideo){
+    if(step.videoUrl){
+      html+=`<div class="viewer-video-wrap">
+        <video controls playsinline preload="none" style="width:100%;height:100%;object-fit:contain;background:#000"
+          src="${step.videoUrl}"></video>
+      </div>`;
+    } else {
+      html+=`<div style="height:80px;display:flex;align-items:center;justify-content:center;
+        background:var(--bg3);color:var(--text3);font-size:13px">動画未撮影</div>`;
+    }
+  }
+
+  // テキスト
+  if(showText && step.textContent){
+    html+=`<div class="viewer-text-body">${step.textContent.replace(/</g,'&lt;')}</div>`;
+  }
+
+  // 添付ファイル
+  const atts=step.attachments||[];
+  if(atts.length>0){
+    html+='<div class="viewer-files">';
+    atts.forEach(a=>{
+      const preview=canPreview(a.type,a.name)
+        ?`onclick="openFileViewer('${a.name.replace(/'/g,"\\'")}','${a.url}','${a.type||''}')"`
+        :`onclick="window.open('${a.url}','_blank')"`;
+      html+=`<div class="viewer-file-row" ${preview}>
+        <span style="font-size:20px">${fileIcon(a.type)}</span>
+        <span class="viewer-file-name">${a.name}</span>
+        <span style="font-size:12px;color:var(--blue)">${canPreview(a.type,a.name)?'表示':'開く'}</span>
+      </div>`;
+    });
+    html+='</div>';
+  }
+
+  if(!html) html='<div style="padding:16px;color:var(--text3);font-size:13px;text-align:center">コンテンツがありません</div>';
+  return html;
+}
+
+function toggleViewerStep(idx){
+  const body=document.getElementById('vb-'+idx);
+  if(!body) return;
+  body.style.display = body.style.display==='none' ? '' : 'none';
+}
+
+function toggleViewerDone(idx){
+  if(viewerDone.has(idx)) viewerDone.delete(idx);
+  else viewerDone.add(idx);
+  renderViewer();
+  // 完了したら次の工程へスクロール
+  if(viewerDone.has(idx)){
+    const next=document.getElementById('vs-'+(idx+1));
+    if(next) setTimeout(()=>next.scrollIntoView({behavior:'smooth',block:'start'}),200);
+  }
+}
+
 /* ── マニュアル編集 ── */
 let editManualIcon='🏭';
 
@@ -1699,12 +1879,7 @@ function renderHome(){
     </div>`;
   }
 
-  // 部門追加ボタン
-  const addDeptBtn=document.createElement('div');
-  addDeptBtn.className='add-dept-row';
-  addDeptBtn.innerHTML='<span>🏢</span> 部門を追加';
-  addDeptBtn.onclick=openDeptSheet;
-  list.appendChild(addDeptBtn);
+  // 部門追加ボタンは上部ボタンのみ（ホーム画面には表示しない）
 
   document.getElementById('st-m').textContent=manuals.length;
   document.getElementById('st-d').textContent=manuals.reduce((a,m)=>a+m.steps.filter(s=>s.status==='done').length,0);
@@ -1842,9 +2017,9 @@ function openManual(idx){
   curM=idx; curMId=manuals[idx].id; curS=null; curSId=null;
   const m=manuals[idx];
   setTB(m.name,
-    `<button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
-     <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
-     <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
+    `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👁 閲覧</button>
+     <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+     <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
     goHome);
   renderStepsList();
   showScreen('steps');
