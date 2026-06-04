@@ -1892,36 +1892,54 @@ function retake(){
 }
 
 async function saveStep(){
-  const m=manuals[curM]; const step=m.steps[curS];
+  const m=manuals[curM];
+  const step=m.steps[curS];
+  if(!step){showToast('工程が見つかりません');return;}
   const dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
   const transcript=document.getElementById('pv-tx').textContent.trim();
 
   let videoUrl = step.videoUrl || null;
 
-  // 新しく録画したBlobをCloud Storageにアップロード
+  // 録画したBlobをCloud Storageにアップロード
   if(recordedBlob){
-    showToast('動画をアップロード中...');
+    // 保存ボタンを無効化
+    document.querySelector('.pv-btns .btn-accent').disabled=true;
+    document.querySelector('.pv-btns .btn-accent').textContent='アップロード中...';
     try {
-      const ext = recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      // contentTypeを確実に設定
+      let mimeType = recordedBlob.type||'video/webm';
+      // コーデック情報を除去してシンプルなMIMEタイプに
+      const baseMime = mimeType.split(';')[0].trim();
+      const ext = baseMime.includes('mp4') ? 'mp4' : 'webm';
       const path = `videos/${curMId}/${step.id}/recording.${ext}`;
       const ref = storage.ref(path);
-      const snap = await ref.put(recordedBlob, { contentType: recordedBlob.type });
+      const snap = await ref.put(recordedBlob, { contentType: baseMime });
       videoUrl = await snap.ref.getDownloadURL();
-      recordedBlob = null; // アップロード済みのため解放
+      recordedBlob = null;
     } catch(e) {
-      showToast('動画アップロードエラー: ' + e.message);
+      document.querySelector('.pv-btns .btn-accent').disabled=false;
+      document.querySelector('.pv-btns .btn-accent').textContent='この工程を保存 ✓';
+      alert('動画アップロードエラー:\n' + e.message + '\n\nStorageルールが未反映の可能性があります。');
       return;
     }
   }
 
   // Firestoreに保存
-  await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
-    status: 'done',
-    dur: dur,
-    transcript: transcript,
-    videoUrl: videoUrl,
-    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
+  try{
+    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+      status: 'done', dur, transcript, videoUrl,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+  }catch(e){
+    alert('保存エラー:\n'+e.message);
+    return;
+  }
+
+  // ローカル状態を更新
+  manuals[curM].steps[curS].status='done';
+  manuals[curM].steps[curS].dur=dur;
+  manuals[curM].steps[curS].transcript=transcript;
+  manuals[curM].steps[curS].videoUrl=videoUrl;
 
   showToast('「'+step.name+'」を保存しました ✓');
   const m2=manuals[curM];
