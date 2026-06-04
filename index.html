@@ -1486,6 +1486,15 @@ function makeManualCard(m, i){
   return c;
 }
 
+// 展開中のチームを管理（部門ID_チームID の形式）
+let expandedTeams = new Set();
+
+function toggleTeam(key){
+  if(expandedTeams.has(key)) expandedTeams.delete(key);
+  else expandedTeams.add(key);
+  renderHome();
+}
+
 function renderHome(){
   const list=document.getElementById('manual-list');
   list.innerHTML='';
@@ -1511,36 +1520,48 @@ function renderHome(){
     dEl.className='dept-section';
     const header=document.createElement('div');
     header.className='dept-header';
-    header.innerHTML=`<span class="dept-name">🏢 ${dept.name}</span>`;
+    // 部門内のマニュアル総数
+    const totalInDept=Object.values(deptGroup).reduce((a,arr)=>a+arr.length,0);
+    header.innerHTML=`
+      <span class="dept-name">🏢 ${dept.name}</span>
+      <span style="font-size:11px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.1);padding:2px 8px;border-radius:10px">${totalInDept}件</span>
+    `;
     dEl.appendChild(header);
 
-    // チーム順に表示
-    const teams=[...dept.teams,{id:'_none',name:'未所属'}];
+    // チーム順に表示（折りたたみ式）
+    const teams=[...dept.teams];
+    const noTeamItems=deptGroup['_none']||[];
+    if(noTeamItems.length>0) teams.push({id:'_none',name:'未所属'});
+
     teams.forEach(team=>{
       const items=deptGroup[team.id]||[];
-      if(items.length===0&&team.id==='_none') return;
+      if(items.length===0) return;
+      const key=`${dept.id}_${team.id}`;
+      const isOpen=expandedTeams.has(key);
       const tEl=document.createElement('div');
       tEl.className='team-section';
-      tEl.innerHTML=`<div class="team-header"><span class="team-name">👥 ${team.name}</span><span style="font-size:11px;color:var(--text3)">${items.length}件</span></div>`;
-      const mList=document.createElement('div');
-      mList.className='team-manuals';
-      items.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
-      tEl.appendChild(mList);
+
+      const tHeader=document.createElement('div');
+      tHeader.className='team-header';
+      tHeader.style.cursor='pointer';
+      tHeader.innerHTML=`
+        <span class="team-name">👥 ${team.name}</span>
+        <span style="font-size:11px;color:var(--text3);margin-right:4px">${items.length}件</span>
+        <span style="font-size:14px;color:var(--text3);transition:transform .2s;display:inline-block;transform:rotate(${isOpen?90:0}deg)">›</span>
+      `;
+      tHeader.onclick=()=>toggleTeam(key);
+      tEl.appendChild(tHeader);
+
+      // マニュアル一覧（展開時のみ表示）
+      if(isOpen){
+        const mList=document.createElement('div');
+        mList.className='team-manuals';
+        mList.style.marginTop='6px';
+        items.forEach(({m,i})=>mList.appendChild(makeManualCard(m,i)));
+        tEl.appendChild(mList);
+      }
       dEl.appendChild(tEl);
     });
-
-    // チーム未設定のマニュアル
-    const noTeam=deptGroup['_none']||[];
-    if(noTeam.length>0&&!dept.teams.some(t=>t.id==='_none')){
-      const tEl=document.createElement('div');
-      tEl.className='team-section';
-      tEl.innerHTML=`<div class="team-header"><span class="team-name">👥 未所属</span></div>`;
-      const mList=document.createElement('div');
-      mList.className='team-manuals';
-      noTeam.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
-      tEl.appendChild(mList);
-      dEl.appendChild(tEl);
-    }
 
     list.appendChild(dEl);
   });
@@ -1549,12 +1570,25 @@ function renderHome(){
   if(noDept.length>0){
     const dEl=document.createElement('div');
     dEl.className='dept-section';
-    dEl.innerHTML=`<div class="dept-header"><span class="dept-name">📋 未分類</span></div>`;
-    const mList=document.createElement('div');
-    mList.className='team-manuals';
-    mList.style.marginTop='8px';
-    noDept.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
-    dEl.appendChild(mList);
+    const key='_none_none';
+    const isOpen=expandedTeams.has(key);
+    const header=document.createElement('div');
+    header.className='dept-header';
+    header.style.cursor='pointer';
+    header.innerHTML=`
+      <span class="dept-name">📋 未分類</span>
+      <span style="font-size:11px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.1);padding:2px 8px;border-radius:10px">${noDept.length}件</span>
+      <span style="font-size:14px;color:rgba(255,255,255,.5);transition:transform .2s;display:inline-block;transform:rotate(${isOpen?90:0}deg)">›</span>
+    `;
+    header.onclick=()=>toggleTeam(key);
+    dEl.appendChild(header);
+    if(isOpen){
+      const mList=document.createElement('div');
+      mList.className='team-manuals';
+      mList.style.marginTop='8px';
+      noDept.forEach(({m,i})=>mList.appendChild(makeManualCard(m,i)));
+      dEl.appendChild(mList);
+    }
     list.appendChild(dEl);
   }
 
@@ -1571,7 +1605,7 @@ function renderHome(){
   const addDeptBtn=document.createElement('div');
   addDeptBtn.className='add-dept-row';
   addDeptBtn.innerHTML='<span>🏢</span> 部門を追加';
-  addDeptBtn.onclick=()=>{ showSheet('sheet-dept'); };
+  addDeptBtn.onclick=openDeptSheet;
   list.appendChild(addDeptBtn);
 
   document.getElementById('st-m').textContent=manuals.length;
