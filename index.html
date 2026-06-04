@@ -1686,17 +1686,29 @@ function openNewManualForTeam(){
 
 // サイドバーのドリルダウン状態
 let sbState='dept'; // 'dept' | 'team' | 'manual'
-let sbDept=null, sbTeam=null;
+let sbDeptIdx=-1, sbTeamIdx=-1;
+
+// グローバル関数（onclick属性から呼び出すため）
+function sbGoDept(idx){ sbDeptIdx=idx; sbTeamIdx=-1; sbState='team'; refreshNavLinks(); }
+function sbGoTeam(idx){ sbTeamIdx=idx; sbState='manual'; refreshNavLinks(); }
+function sbBack(){
+  if(sbState==='manual'){ sbState='team'; sbTeamIdx=-1; }
+  else { sbState='dept'; sbDeptIdx=-1; sbTeamIdx=-1; }
+  refreshNavLinks();
+}
+function sbOpenManual(i){ openManual(i); closeDrawer(); }
 
 function refreshNavLinks(){
   ['sb-manuals','drawer-manuals'].forEach(id=>{
-    const el=document.getElementById(id);if(!el)return;
+    const el=document.getElementById(id);
+    if(!el) return;
     renderSidebarNav(el);
   });
 }
 
 function renderSidebarNav(el){
-  el.innerHTML='';
+  const dept = sbDeptIdx>=0 ? departments[sbDeptIdx] : null;
+  const team = dept && sbTeamIdx>=0 ? dept.teams[sbTeamIdx] : null;
 
   if(sbState==='dept'){
     // 部門一覧
@@ -1704,86 +1716,53 @@ function renderSidebarNav(el){
       el.innerHTML='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">部門がありません</div>';
       return;
     }
-    departments.forEach(dept=>{
-      const btn=document.createElement('button');
-      btn.className='nav-btn';
-      btn.innerHTML=`
+    el.innerHTML = departments.map((d,i)=>`
+      <button class="nav-btn" onclick="sbGoDept(${i})">
         <span style="font-size:14px">🏢</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${dept.name}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${d.name}</span>
         <span style="font-size:16px;opacity:.5">›</span>
-      `;
-      btn.onclick=()=>{ sbDept=dept; sbState='team'; refreshNavLinks(); };
-      el.appendChild(btn);
-    });
+      </button>`).join('');
 
   } else if(sbState==='team'){
-    // 戻るボタン
-    const back=document.createElement('button');
-    back.className='nav-btn';
-    back.style.cssText='opacity:.7;font-size:11px';
-    back.innerHTML=`<span>←</span><span style="flex:1;font-size:11px">部門一覧へ戻る</span>`;
-    back.onclick=()=>{ sbState='dept'; sbDept=null; refreshNavLinks(); };
-    el.appendChild(back);
-
-    // 部門ラベル
-    const lbl=document.createElement('div');
-    lbl.className='nav-label';
-    lbl.textContent=sbDept?.name||'';
-    el.appendChild(lbl);
-
     // チーム一覧
-    const teams=sbDept?.teams||[];
-    if(teams.length===0){
-      el.innerHTML+='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">チームがありません</div>';
-      return;
-    }
-    teams.forEach(team=>{
-      const cnt=manuals.filter(m=>m.deptId===sbDept.id&&m.teamId===team.id).length;
-      const btn=document.createElement('button');
-      btn.className='nav-btn';
-      btn.innerHTML=`
-        <span style="font-size:14px">👥</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${team.name}</span>
-        <span class="nav-count">${cnt}</span>
-      `;
-      btn.onclick=()=>{ sbTeam=team; sbState='manual'; refreshNavLinks(); };
-      el.appendChild(btn);
-    });
+    const teams = dept?.teams||[];
+    const teamRows = teams.length===0
+      ? '<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">チームがありません</div>'
+      : teams.map((t,i)=>{
+          const cnt=manuals.filter(m=>m.deptId===dept.id&&m.teamId===t.id).length;
+          return `<button class="nav-btn" onclick="sbGoTeam(${i})">
+            <span style="font-size:14px">👥</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${t.name}</span>
+            <span class="nav-count">${cnt}</span>
+          </button>`;
+        }).join('');
+    el.innerHTML=`
+      <button class="nav-btn" onclick="sbBack()" style="opacity:.7">
+        <span>←</span><span style="flex:1;font-size:11px">部門一覧へ戻る</span>
+      </button>
+      <div class="nav-label">${dept?.name||''}</div>
+      ${teamRows}`;
 
   } else if(sbState==='manual'){
-    // 戻るボタン
-    const back=document.createElement('button');
-    back.className='nav-btn';
-    back.style.cssText='opacity:.7';
-    back.innerHTML=`<span>←</span><span style="flex:1;font-size:11px">${sbDept?.name||''}へ戻る</span>`;
-    back.onclick=()=>{ sbState='team'; sbTeam=null; refreshNavLinks(); };
-    el.appendChild(back);
-
-    // チームラベル
-    const lbl=document.createElement('div');
-    lbl.className='nav-label';
-    lbl.textContent=sbTeam?.name||'';
-    el.appendChild(lbl);
-
     // マニュアル一覧
-    const items=manuals.filter((m,i)=>m.deptId===sbDept?.id&&m.teamId===sbTeam?.id)
-      .map(m=>({m, i:manuals.indexOf(m)}));
-    if(items.length===0){
-      el.innerHTML+='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">マニュアルがありません</div>';
-      return;
-    }
-    items.forEach(({m,i})=>{
-      const done=m.steps.filter(s=>s.status==='done').length;
-      const btn=document.createElement('button');
-      btn.className='nav-btn';
-      btn.innerHTML=`
-        <span style="font-size:14px">${m.icon}</span>
-        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${m.name}</span>
-        <span class="nav-count">${done}/${m.steps.length}</span>
-      `;
-      btn.onclick=()=>{ openManual(i); closeDrawer(); };
-      el.appendChild(btn);
-    });
+    const items = manuals.map((m,i)=>({m,i}))
+      .filter(({m})=>m.deptId===dept?.id && m.teamId===team?.id);
+    const manualRows = items.length===0
+      ? '<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">マニュアルがありません</div>'
+      : items.map(({m,i})=>{
+          const done=m.steps.filter(s=>s.status==='done').length;
+          return `<button class="nav-btn" onclick="sbOpenManual(${i})">
+            <span style="font-size:14px">${m.icon}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${m.name}</span>
+            <span class="nav-count">${done}/${m.steps.length}</span>
+          </button>`;
+        }).join('');
+    el.innerHTML=`
+      <button class="nav-btn" onclick="sbBack()" style="opacity:.7">
+        <span>←</span><span style="flex:1;font-size:11px">${dept?.name||''}へ戻る</span>
+      </button>
+      <div class="nav-label">${team?.name||''}</div>
+      ${manualRows}`;
   }
 }
 
