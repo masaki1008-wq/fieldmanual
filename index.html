@@ -607,16 +607,47 @@ body{
     <div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;margin-bottom:4px">NISHIDA SEIMUGI</div>
     <div style="font-size:18px;font-weight:700;margin-bottom:4px;color:#1a1a0f">西田精麦</div>
     <div style="font-size:14px;font-weight:700;color:#444;margin-bottom:28px">動画マニュアル</div>
-    <button id="btn-google-login" onclick="loginWithGoogle()" style="
-      width:100%;padding:15px;border-radius:14px;border:1.5px solid #ddd;
-      background:#fff;font-size:14px;font-family:var(--font);font-weight:700;
-      cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
-      margin-bottom:12px;transition:background .15s;-webkit-tap-highlight-color:transparent;
-    ">
-      <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20">
-      Googleでログイン
-    </button>
-    <div id="login-msg" style="font-size:11px;color:#aaa">社内メンバーのみアクセス可能です</div>
+    <div id="login-form-area">
+      <!-- ログイン -->
+      <div id="login-form">
+        <input id="login-email" type="email" placeholder="メールアドレス（@westa.co.jp）"
+          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
+          font-size:14px;font-family:var(--font);margin-bottom:10px;outline:none;box-sizing:border-box">
+        <input id="login-pass" type="password" placeholder="パスワード"
+          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
+          font-size:14px;font-family:var(--font);margin-bottom:14px;outline:none;box-sizing:border-box">
+        <button onclick="loginWithEmail()" style="
+          width:100%;padding:14px;border-radius:12px;border:none;
+          background:#18180f;color:#fff;font-size:14px;font-family:var(--font);font-weight:700;
+          cursor:pointer;margin-bottom:10px;">ログイン</button>
+        <button onclick="showRegForm()" style="
+          width:100%;padding:12px;border-radius:12px;border:1.5px solid #ddd;
+          background:#fff;font-size:13px;font-family:var(--font);font-weight:500;
+          cursor:pointer;color:#555;">はじめての方はこちら（アカウント作成）</button>
+      </div>
+      <!-- アカウント作成 -->
+      <div id="reg-form" style="display:none">
+        <div style="font-size:13px;font-weight:700;margin-bottom:12px;color:#333">アカウントを作成</div>
+        <input id="reg-name" type="text" placeholder="氏名"
+          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
+          font-size:14px;font-family:var(--font);margin-bottom:10px;outline:none;box-sizing:border-box">
+        <input id="reg-email" type="email" placeholder="メールアドレス（@westa.co.jp）"
+          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
+          font-size:14px;font-family:var(--font);margin-bottom:10px;outline:none;box-sizing:border-box">
+        <input id="reg-pass" type="password" placeholder="パスワード（6文字以上）"
+          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
+          font-size:14px;font-family:var(--font);margin-bottom:14px;outline:none;box-sizing:border-box">
+        <button onclick="registerWithEmail()" style="
+          width:100%;padding:14px;border-radius:12px;border:none;
+          background:#18180f;color:#fff;font-size:14px;font-family:var(--font);font-weight:700;
+          cursor:pointer;margin-bottom:10px;">アカウントを作成</button>
+        <button onclick="showLoginForm()" style="
+          width:100%;padding:12px;border-radius:12px;border:1.5px solid #ddd;
+          background:#fff;font-size:13px;font-family:var(--font);
+          cursor:pointer;color:#555;">ログイン画面に戻る</button>
+      </div>
+    </div>
+    <div id="login-msg" style="font-size:11px;color:#aaa;margin-top:12px">@westa.co.jp のアドレスでログインできます</div>
   </div>
 </div>
 
@@ -1041,32 +1072,64 @@ const storage = firebase.storage();
 /* ── AUTH ── */
 let currentUser = null;
 
-async function loginWithGoogle(){
-  const provider = new firebase.auth.GoogleAuthProvider();
-  document.getElementById('login-msg').textContent = 'ログイン中...';
-  try {
-    if(isMobile()){
-      // スマホはリダイレクト方式（ポップアップがブロックされるため）
-      await auth.signInWithRedirect(provider);
-    } else {
-      await auth.signInWithPopup(provider);
-    }
-  } catch(e) {
-    document.getElementById('login-msg').textContent = '社内メンバーのみアクセス可能です';
-    showToast('ログインに失敗しました: ' + e.message);
+function setLoginMsg(msg, isError=false){
+  const el=document.getElementById('login-msg');
+  el.textContent=msg;
+  el.style.color=isError?'#e84d00':'#aaa';
+}
+
+function showLoginForm(){
+  document.getElementById('login-form').style.display='';
+  document.getElementById('reg-form').style.display='none';
+  setLoginMsg('@westa.co.jp のアドレスでログインできます');
+}
+
+function showRegForm(){
+  document.getElementById('login-form').style.display='none';
+  document.getElementById('reg-form').style.display='';
+  setLoginMsg('');
+}
+
+async function loginWithEmail(){
+  const email=document.getElementById('login-email').value.trim();
+  const pass=document.getElementById('login-pass').value;
+  if(!email||!pass){setLoginMsg('メールアドレスとパスワードを入力してください',true);return;}
+  if(!email.endsWith('@westa.co.jp')){setLoginMsg('@westa.co.jp のアドレスを使用してください',true);return;}
+  setLoginMsg('ログイン中...');
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+  }catch(e){
+    const msg={
+      'auth/user-not-found':'アカウントが見つかりません。アカウント作成をしてください。',
+      'auth/wrong-password':'パスワードが違います。',
+      'auth/invalid-email':'メールアドレスの形式が正しくありません。',
+      'auth/too-many-requests':'試行回数が多すぎます。しばらく待ってから再試行してください。',
+    }[e.code]||'ログインに失敗しました: '+e.message;
+    setLoginMsg(msg,true);
   }
 }
 
-// リダイレクト後の結果処理（スマホ用）
-auth.getRedirectResult().then(result => {
-  if(result && result.user){
-    // onAuthStateChangedで処理されるため何もしない
+async function registerWithEmail(){
+  const name=document.getElementById('reg-name').value.trim();
+  const email=document.getElementById('reg-email').value.trim();
+  const pass=document.getElementById('reg-pass').value;
+  if(!name){setLoginMsg('氏名を入力してください',true);return;}
+  if(!email||!pass){setLoginMsg('メールアドレスとパスワードを入力してください',true);return;}
+  if(!email.endsWith('@westa.co.jp')){setLoginMsg('@westa.co.jp のアドレスを使用してください',true);return;}
+  if(pass.length<6){setLoginMsg('パスワードは6文字以上にしてください',true);return;}
+  setLoginMsg('アカウントを作成中...');
+  try{
+    const cred=await auth.createUserWithEmailAndPassword(email, pass);
+    await cred.user.updateProfile({displayName:name});
+  }catch(e){
+    const msg={
+      'auth/email-already-in-use':'このメールアドレスは既に登録されています。ログインしてください。',
+      'auth/weak-password':'パスワードが弱すぎます。6文字以上にしてください。',
+      'auth/invalid-email':'メールアドレスの形式が正しくありません。',
+    }[e.code]||'登録に失敗しました: '+e.message;
+    setLoginMsg(msg,true);
   }
-}).catch(e => {
-  if(e.code && e.code !== 'auth/no-current-user'){
-    showToast('ログインエラー: ' + e.message);
-  }
-});
+}
 
 const ALLOWED_DOMAIN = 'westa.co.jp';
 
@@ -1076,8 +1139,7 @@ auth.onAuthStateChanged(async user => {
     // ドメインチェック
     if(!user.email || !user.email.endsWith('@' + ALLOWED_DOMAIN)){
       await auth.signOut();
-      document.getElementById('login-msg').textContent = `アクセスできません。@${ALLOWED_DOMAIN} のアカウントでログインしてください。`;
-      document.getElementById('login-msg').style.color = '#e84d00';
+      setLoginMsg(`@${ALLOWED_DOMAIN} のアドレスでログインしてください`, true);
       return;
     }
     document.getElementById('login-screen').style.display = 'none';
