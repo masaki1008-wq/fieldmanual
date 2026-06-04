@@ -543,9 +543,10 @@ body{
   background:#000;width:100%;
   height:calc(100vw * 9/16); /* 16:9 */
   max-height:320px;
-  position:relative;
+  position:relative;overflow:hidden;
 }
 @media(min-width:768px){.vwr-video{max-height:420px}}
+@keyframes spin{to{transform:rotate(360deg)}}
 .vwr-video video{width:100%;height:100%;object-fit:contain}
 .vwr-play-ov{
   position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
@@ -1537,13 +1538,25 @@ function vwrRender(){
     ${step.desc?`<div class="vwr-step-desc">${step.desc}</div>`:''}
   `;
 
-  // 動画（メタデータのみプリロードで高速化）
+  // 動画（autoプリロードでスムーズ再生）
   if(showVideo){
     if(step.videoUrl){
-      html+=`<div class="vwr-video">
-        <video id="vwr-vid" controls playsinline preload="metadata"
+      html+=`<div class="vwr-video" id="vwr-vid-wrap">
+        <video id="vwr-vid" controls playsinline preload="auto"
           style="width:100%;height:100%;object-fit:contain;background:#000"
-          src="${step.videoUrl}"></video>
+          src="${step.videoUrl}"
+          oncanplay="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='none')"
+          onwaiting="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='flex')">
+        </video>
+        <div id="vwr-loading" style="
+          position:absolute;inset:0;background:rgba(0,0,0,.6);
+          display:flex;align-items:center;justify-content:center;
+          flex-direction:column;gap:8px;pointer-events:none;
+        ">
+          <div style="width:36px;height:36px;border:3px solid rgba(255,255,255,.3);
+            border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite"></div>
+          <div style="color:rgba(255,255,255,.7);font-size:12px">読み込み中...</div>
+        </div>
       </div>`;
     } else {
       html+=`<div style="height:80px;display:flex;align-items:center;justify-content:center;
@@ -2414,7 +2427,8 @@ async function startRec(stepIdx){
     const constraints={
       video:{
         facingMode: facingMode,
-        width:{ideal:1280}, height:{ideal:720}
+        width:{ideal:1280, max:1280}, height:{ideal:720, max:720},
+        frameRate:{ideal:30, max:30}
       },
       audio:true
     };
@@ -2453,7 +2467,7 @@ function stopStream(){
   torchOn=false;
 }
 
-// Choose best supported MIME type for the device
+// デバイスに最適なMIMEタイプを選択
 function getBestMime(){
   const types=[
     'video/mp4;codecs=h264,aac',
@@ -2473,22 +2487,29 @@ function toggleRec(){
     showToast('カメラが起動していません');return;
   }
   if(!isRec){
-    // START recording
     isRec=true; recSec=0; recChunks=[];
     document.getElementById('rec-main').classList.add('recording');
     document.getElementById('rec-badge').classList.add('show');
     document.getElementById('rec-timer').classList.add('show');
 
     const mime=getBestMime();
-    const opts=mime?{mimeType:mime}:{};
+    // ビットレートを抑えてファイルサイズを削減
+    // 標準画質: 映像2Mbps + 音声96kbps ≒ 1分あたり約15MB
+    const opts = mime ? {
+      mimeType: mime,
+      videoBitsPerSecond: 2000000,  // 2 Mbps（デフォルト8Mbps→75%削減）
+      audioBitsPerSecond: 96000     // 96 kbps
+    } : {};
     try{
       mediaRecorder=new MediaRecorder(mediaStream,opts);
     } catch(e){
-      mediaRecorder=new MediaRecorder(mediaStream);
+      // フォールバック: ビットレート指定なし
+      try{ mediaRecorder=new MediaRecorder(mediaStream,{mimeType:mime}); }
+      catch(e2){ mediaRecorder=new MediaRecorder(mediaStream); }
     }
     mediaRecorder.ondataavailable=e=>{if(e.data&&e.data.size>0)recChunks.push(e.data);};
     mediaRecorder.onstop=onRecordingStop;
-    mediaRecorder.start(1000); // collect data every 1s
+    mediaRecorder.start(1000);
 
     recInt=setInterval(()=>{
       recSec++;
