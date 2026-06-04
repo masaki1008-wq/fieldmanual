@@ -587,9 +587,17 @@ body{
 
 /* スマホ動画プレビューを大きく */
 @media(max-width:767px){
-  .pv-video{height:calc(100vw * 9/16);max-height:280px}
   .video-thumb{height:220px}
   .text-manual-area{font-size:15px;min-height:180px}
+}
+/* 動画コンテナ：縦横自動対応 */
+.auto-vid-wrap{
+  width:100%;background:#000;
+  display:flex;align-items:center;justify-content:center;
+  overflow:hidden;transition:height .2s;
+}
+.auto-vid-wrap video{
+  width:100%;height:100%;object-fit:contain;background:#000;
 }
 
 /* アップロード進捗バー */
@@ -902,10 +910,11 @@ body{
   <!-- SCREEN: PREVIEW -->
   <div class="screen" id="screen-preview">
     <div style="display:flex;flex-direction:column;flex:1;overflow:hidden" id="pv-wrap">
-      <div class="pv-video" style="position:relative">
+      <div class="pv-video auto-vid-wrap" id="pv-vid-wrap" style="position:relative;height:240px">
         <!-- Recorded video playback -->
         <video id="pv-video" controls playsinline
-          style="width:100%;height:100%;object-fit:contain;display:none;background:#000"></video>
+          style="width:100%;height:100%;object-fit:contain;display:none;background:#000"
+          onloadedmetadata="fitVideoContainer(this,document.getElementById('pv-vid-wrap'))"></video>
         <!-- Fallback when no blob yet -->
         <div id="pv-fallback" style="display:flex;flex-direction:column;align-items:center;gap:12px">
           <div class="pv-emoji">🎬</div>
@@ -1541,10 +1550,11 @@ function vwrRender(){
   // 動画（autoプリロードでスムーズ再生）
   if(showVideo){
     if(step.videoUrl){
-      html+=`<div class="vwr-video" id="vwr-vid-wrap">
+      html+=`<div class="vwr-video auto-vid-wrap" id="vwr-vid-wrap" style="height:240px">
         <video id="vwr-vid" controls playsinline preload="auto"
           style="width:100%;height:100%;object-fit:contain;background:#000"
           src="${step.videoUrl}"
+          onloadedmetadata="fitVideoContainer(this,document.getElementById('vwr-vid-wrap'))"
           oncanplay="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='none')"
           onwaiting="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='flex')">
         </video>
@@ -2155,9 +2165,12 @@ function renderDetailInto(container,idx){
             <div class="video-thumb-emoji">${m.icon}</div>
             <div class="play-btn">▶</div>
           </div>
+          <div id="vplayer-wrap-${idx}" class="auto-vid-wrap" style="display:none;height:220px">
           <video id="vplayer-${idx}" controls playsinline
-            style="display:none;width:100%;max-height:220px;background:#000;border-radius:0"
-            src="${step.videoUrl}"></video>
+            style="width:100%;height:100%;object-fit:contain;background:#000"
+            src="${step.videoUrl}"
+            onloadedmetadata="fitVideoContainer(this,document.getElementById('vplayer-wrap-${idx}'))"></video>
+          </div>
           <div class="video-meta">
             <span class="video-dur">⏱ ${step.dur||'--'}</span>
             <div class="video-acts">
@@ -2243,6 +2256,31 @@ async function saveTextContent(idx){
   manuals[curM].steps[idx].status = text?'done':'todo';
   renderStepsList();
   showToast('テキストを保存しました ✓');
+}
+
+/* ── 動画縦横自動調整 ── */
+function fitVideoContainer(vid, wrap){
+  if(!vid||!wrap) return;
+  const apply=()=>{
+    const vw=vid.videoWidth, vh=vid.videoHeight;
+    if(!vw||!vh) return;
+    const isPortrait=vh>vw;
+    const maxH=window.innerHeight*0.75;
+    const contW=wrap.offsetWidth||window.innerWidth;
+    const ratio=vh/vw;
+    const calcH=contW*ratio;
+    wrap.style.height=Math.min(calcH, maxH)+'px';
+  };
+  if(vid.readyState>=1){ apply(); }
+  else { vid.addEventListener('loadedmetadata', apply, {once:true}); }
+  // 画面回転対応
+  window.addEventListener('resize', apply);
+}
+
+function applyAutoVid(containerId, videoId){
+  const wrap=document.getElementById(containerId);
+  const vid=document.getElementById(videoId);
+  if(wrap&&vid) fitVideoContainer(vid, wrap);
 }
 
 function fileIcon(type){
@@ -2354,6 +2392,7 @@ async function deleteAttachment(idx, attachIdx){
 
 function playStepVideo(idx){
   const thumb=document.getElementById('vthumb-'+idx);
+  const wrap=document.getElementById('vplayer-wrap-'+idx);
   const player=document.getElementById('vplayer-'+idx);
   if(!player) return;
   if(!player.src&&!manuals[curM].steps[idx].videoUrl){
@@ -2361,7 +2400,8 @@ function playStepVideo(idx){
   }
   if(!player.src) player.src=manuals[curM].steps[idx].videoUrl;
   thumb.style.display='none';
-  player.style.display='block';
+  if(wrap) wrap.style.display='flex';
+  else player.style.display='block';
   player.play();
 }
 
