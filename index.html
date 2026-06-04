@@ -1068,9 +1068,18 @@ auth.getRedirectResult().then(result => {
   }
 });
 
+const ALLOWED_DOMAIN = 'westa.co.jp';
+
 auth.onAuthStateChanged(async user => {
   currentUser = user;
   if(user){
+    // ドメインチェック
+    if(!user.email || !user.email.endsWith('@' + ALLOWED_DOMAIN)){
+      await auth.signOut();
+      document.getElementById('login-msg').textContent = `アクセスできません。@${ALLOWED_DOMAIN} のアカウントでログインしてください。`;
+      document.getElementById('login-msg').style.color = '#e84d00';
+      return;
+    }
     document.getElementById('login-screen').style.display = 'none';
     // ユーザー情報をFirestoreに保存
     await db.collection('users').doc(user.uid).set({
