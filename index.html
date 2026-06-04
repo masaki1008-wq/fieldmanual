@@ -1467,11 +1467,24 @@ function renderDetailInto(container,idx){
 
   let textBlock='';
   if(showText){
+    const attachments = step.attachments||[];
+    const attHtml = attachments.map((a,ai)=>`
+      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:5px">
+        <span style="font-size:16px">${fileIcon(a.type)}</span>
+        <a href="${a.url}" target="_blank" style="flex:1;font-size:12px;color:var(--blue);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${a.name}</a>
+        <button class="btn btn-ghost btn-sm" onclick="deleteAttachment(${idx},${ai})" style="color:var(--accent);padding:4px 8px">削除</button>
+      </div>`).join('');
     textBlock=`
       <div class="text-manual-block">
         <div class="text-manual-lbl">📄 テキストマニュアル</div>
         <textarea class="text-manual-area" id="text-area-${idx}" placeholder="手順・注意事項をここに記述してください...">${step.textContent||''}</textarea>
         <button class="btn btn-accent btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
+        <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
+          <div class="text-manual-lbl">📎 添付ファイル</div>
+          <div id="attach-list-${idx}" style="margin-bottom:8px">${attHtml||'<div style="font-size:12px;color:var(--text3);padding:4px 0">添付ファイルなし</div>'}</div>
+          <input type="file" id="file-inp-${idx}" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.xlsx,.pptx" style="display:none" onchange="uploadAttachment(${idx},this)">
+          <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="document.getElementById('file-inp-${idx}').click()">＋ ファイルを添付（PDF・Word・画像など）</button>
+        </div>
       </div>`;
   }
 
@@ -1509,7 +1522,63 @@ async function saveTextContent(idx){
     status: text?'done':'todo',
     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
   });
+  manuals[curM].steps[idx].textContent = text;
+  manuals[curM].steps[idx].status = text?'done':'todo';
+  renderStepsList();
   showToast('テキストを保存しました ✓');
+}
+
+function fileIcon(type){
+  if(!type) return '📄';
+  if(type.includes('pdf')) return '📕';
+  if(type.includes('word')||type.includes('document')) return '📘';
+  if(type.includes('sheet')||type.includes('excel')) return '📗';
+  if(type.includes('presentation')||type.includes('powerpoint')) return '📙';
+  if(type.includes('image')) return '🖼️';
+  if(type.includes('text')) return '📝';
+  return '📎';
+}
+
+async function uploadAttachment(idx, input){
+  const file = input.files[0];
+  if(!file) return;
+  if(file.size > 50*1024*1024){ showToast('ファイルサイズは50MB以下にしてください'); return; }
+  const step = manuals[curM].steps[idx];
+  showToast('アップロード中...');
+  try {
+    const path = `files/${curMId}/${step.id}/${Date.now()}_${file.name}`;
+    const ref = storage.ref(path);
+    const snap = await ref.put(file, { contentType: file.type });
+    const url = await snap.ref.getDownloadURL();
+    const attachments = [...(step.attachments||[]), { name: file.name, url, type: file.type, path }];
+    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+      attachments, status:'done',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    manuals[curM].steps[idx].attachments = attachments;
+    manuals[curM].steps[idx].status = 'done';
+    renderStepsList();
+    const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+    renderDetailInto(container, idx);
+    showToast('ファイルを添付しました ✓');
+  } catch(e) {
+    showToast('アップロードエラー: '+e.message);
+  }
+  input.value='';
+}
+
+async function deleteAttachment(idx, attachIdx){
+  if(!confirm('この添付ファイルを削除しますか？')) return;
+  const step = manuals[curM].steps[idx];
+  const attachments = [...(step.attachments||[])];
+  // Storageからも削除
+  try { await storage.ref(attachments[attachIdx].path).delete(); } catch(e){}
+  attachments.splice(attachIdx, 1);
+  await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({ attachments });
+  manuals[curM].steps[idx].attachments = attachments;
+  const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+  renderDetailInto(container, idx);
+  showToast('添付ファイルを削除しました');
 }
 
 function playStepVideo(idx){
@@ -1528,25 +1597,28 @@ function playStepVideo(idx){
 async function moveStep(idx,dir){
   const m=manuals[curM];const ni=idx+dir;
   if(ni<0||ni>=m.steps.length){showToast('これ以上移動できません');return;}
-  // Firestoreで順番を入れ替え
   const batch = db.batch();
   const stepA = m.steps[idx];
   const stepB = m.steps[ni];
   batch.update(db.collection('manuals').doc(curMId).collection('steps').doc(stepA.id), { order: ni });
   batch.update(db.collection('manuals').doc(curMId).collection('steps').doc(stepB.id), { order: idx });
   await batch.commit();
+  [m.steps[idx], m.steps[ni]] = [m.steps[ni], m.steps[idx]];
   curS=ni; curSId=m.steps[ni].id;
+  renderStepsList();
+  if(!isMobile()) renderDetailInto(document.getElementById('pc-detail'), ni);
   showToast('工程の順番を変更しました');
 }
 
 async function deleteStep(idx){
   const stepId = manuals[curM].steps[idx].id;
   await db.collection('manuals').doc(curMId).collection('steps').doc(stepId).delete();
+  manuals[curM].steps.splice(idx, 1);
   curS=null; curSId=null;
-  if(isMobile()){openManual(curM);}
-  else{
-    document.getElementById('pc-detail').innerHTML='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
-  }
+  renderStepsList();
+  const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
+  document.getElementById('pc-detail').innerHTML=emptyHtml;
+  if(isMobile()) showScreen('steps');
   showToast('工程を削除しました');
 }
 
