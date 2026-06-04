@@ -875,7 +875,12 @@ body{
     </div>
     <div class="inp-g" id="text-content-grp" style="display:none">
       <label class="inp-lbl">テキスト内容</label>
-      <textarea class="text-manual-area" id="inp-text-content" placeholder="手順・注意事項をここに記述してください..." style="min-height:120px"></textarea>
+      <textarea class="text-manual-area" id="inp-text-content" placeholder="手順・注意事項をここに記述してください..." style="min-height:100px"></textarea>
+      <div style="margin-top:8px">
+        <input type="file" id="inp-temp-file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.xlsx,.pptx,.xls,.ppt" multiple style="display:none" onchange="addTempFiles(this)">
+        <button type="button" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:6px" onclick="document.getElementById('inp-temp-file').click()">📎 ファイルを添付（PDF・Word・画像など）</button>
+        <div id="temp-file-list"></div>
+      </div>
     </div>
     <div class="sheet-btns" id="step-btns">
       <button class="btn-s bsa" id="btn-add-rec" onclick="addStepRec()">追加してすぐ録画 🎥</button>
@@ -1925,53 +1930,111 @@ async function createManual(){
 }
 
 /* ── ADD STEP ── */
+let tempFiles = []; // 工程追加シートの仮添付ファイル
+
+function addTempFiles(input){
+  Array.from(input.files).forEach(f => tempFiles.push(f));
+  renderTempFileList();
+  input.value='';
+}
+
+function renderTempFileList(){
+  const list=document.getElementById('temp-file-list');
+  if(!list) return;
+  list.innerHTML=tempFiles.map((f,i)=>`
+    <div style="display:flex;align-items:center;gap:7px;padding:5px 8px;background:var(--bg3);border-radius:7px;margin-bottom:4px">
+      <span>${fileIcon(f.type)}</span>
+      <span style="flex:1;font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.name}</span>
+      <span style="font-size:10px;color:var(--text3)">${(f.size/1024/1024).toFixed(1)}MB</span>
+      <button onclick="removeTempFile(${i})" style="border:none;background:none;color:var(--accent);cursor:pointer;font-size:14px;padding:0 2px">×</button>
+    </div>`).join('');
+}
+
+function removeTempFile(idx){
+  tempFiles.splice(idx,1);
+  renderTempFileList();
+}
+
+async function uploadTempFiles(manualId, stepId){
+  if(tempFiles.length===0) return [];
+  showToast('ファイルをアップロード中...');
+  const attachments=[];
+  for(const file of tempFiles){
+    const path=`files/${manualId}/${stepId}/${Date.now()}_${file.name}`;
+    const snap=await storage.ref(path).put(file,{contentType:file.type||'application/octet-stream'});
+    const url=await snap.ref.getDownloadURL();
+    attachments.push({name:file.name, url, type:file.type||'', path});
+  }
+  return attachments;
+}
+
 async function addStepRec(){
+  if(!curMId){showToast('マニュアルを開いてから工程を追加してください');return;}
   const name=document.getElementById('inp-sname').value.trim();
   const desc=document.getElementById('inp-sdesc').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
-  const order=manuals[curM].steps.length;
-  const ref = await db.collection('manuals').doc(curMId).collection('steps').add({
-    name, desc, status:'todo', contentType:curCtype,
-    dur:null, transcript:null, videoUrl:null, textContent:null,
-    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  document.getElementById('inp-sname').value='';
-  document.getElementById('inp-sdesc').value='';
-  hideSheet('sheet-step');
-  curSId=ref.id;
-  startRec(order);
+  const order=manuals[curM]?.steps.length||0;
+  try{
+    const ref = await db.collection('manuals').doc(curMId).collection('steps').add({
+      name, desc, status:'todo', contentType:curCtype,
+      dur:null, transcript:null, videoUrl:null, textContent:null,
+      attachments:[], order,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    resetStepSheet();
+    hideSheet('sheet-step');
+    curSId=ref.id;
+    startRec(order);
+  }catch(e){showToast('エラー: '+e.message);}
 }
 
 async function addStepOnly(){
+  if(!curMId){showToast('マニュアルを開いてから工程を追加してください');return;}
   const name=document.getElementById('inp-sname').value.trim();
   const desc=document.getElementById('inp-sdesc').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
-  const order=manuals[curM].steps.length;
-  await db.collection('manuals').doc(curMId).collection('steps').add({
-    name, desc, status:'todo', contentType:curCtype,
-    dur:null, transcript:null, videoUrl:null, textContent:null,
-    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  resetStepSheet();
-  hideSheet('sheet-step');
-  showToast('工程を追加しました');
+  const order=manuals[curM]?.steps.length||0;
+  try{
+    await db.collection('manuals').doc(curMId).collection('steps').add({
+      name, desc, status:'todo', contentType:curCtype,
+      dur:null, transcript:null, videoUrl:null, textContent:null,
+      attachments:[], order,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    resetStepSheet();
+    hideSheet('sheet-step');
+    showToast('工程を追加しました');
+  }catch(e){showToast('エラー: '+e.message);}
 }
 
 async function addStepWithText(){
+  if(!curMId){showToast('マニュアルを開いてから工程を追加してください');return;}
   const name=document.getElementById('inp-sname').value.trim();
   const desc=document.getElementById('inp-sdesc').value.trim();
   const textContent=document.getElementById('inp-text-content').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
-  const order=manuals[curM].steps.length;
-  await db.collection('manuals').doc(curMId).collection('steps').add({
-    name, desc, status: textContent?'done':'todo', contentType:curCtype,
-    dur:null, transcript:null, videoUrl:null,
-    textContent: textContent||null,
-    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
-  });
-  resetStepSheet();
-  hideSheet('sheet-step');
-  showToast('テキスト工程を追加しました ✓');
+  const order=manuals[curM]?.steps.length||0;
+  try{
+    const ref=await db.collection('manuals').doc(curMId).collection('steps').add({
+      name, desc, contentType:curCtype,
+      dur:null, transcript:null, videoUrl:null,
+      textContent:textContent||null,
+      attachments:[], order,
+      status:'todo',
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // ファイルアップロード
+    const attachments=await uploadTempFiles(curMId, ref.id);
+    const isDone=!!(textContent||attachments.length);
+    if(attachments.length>0||isDone){
+      await db.collection('manuals').doc(curMId).collection('steps').doc(ref.id).update({
+        attachments, status:isDone?'done':'todo'
+      });
+    }
+    resetStepSheet();
+    hideSheet('sheet-step');
+    showToast('工程を追加しました ✓');
+  }catch(e){showToast('エラー: '+e.message);}
 }
 
 function resetStepSheet(){
@@ -1979,6 +2042,8 @@ function resetStepSheet(){
   document.getElementById('inp-sdesc').value='';
   document.getElementById('inp-text-content').value='';
   document.getElementById('text-content-grp').style.display='none';
+  document.getElementById('temp-file-list').innerHTML='';
+  tempFiles=[];
   curCtype='video';
   document.querySelectorAll('.ctype-btn').forEach((b,i)=>b.classList.toggle('sel',i===0));
   document.getElementById('btn-add-rec').textContent='追加してすぐ録画 🎥';
