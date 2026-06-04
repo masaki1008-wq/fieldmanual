@@ -873,6 +873,10 @@ body{
         <button class="ctype-btn" onclick="selCtype(this,'both')">🎥+📄 両方</button>
       </div>
     </div>
+    <div class="inp-g" id="text-content-grp" style="display:none">
+      <label class="inp-lbl">テキスト内容</label>
+      <textarea class="text-manual-area" id="inp-text-content" placeholder="手順・注意事項をここに記述してください..." style="min-height:120px"></textarea>
+    </div>
     <div class="sheet-btns" id="step-btns">
       <button class="btn-s bsa" id="btn-add-rec" onclick="addStepRec()">追加してすぐ録画 🎥</button>
       <button class="btn-s bsg" onclick="addStepOnly()">あとで追加</button>
@@ -1876,12 +1880,37 @@ async function addStepOnly(){
     dur:null, transcript:null, videoUrl:null, textContent:null,
     order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
-  document.getElementById('inp-sname').value='';
-  document.getElementById('inp-sdesc').value='';
-  curCtype='video';
-  document.querySelectorAll('.ctype-btn').forEach((b,i)=>b.classList.toggle('sel',i===0));
+  resetStepSheet();
   hideSheet('sheet-step');
   showToast('工程を追加しました');
+}
+
+async function addStepWithText(){
+  const name=document.getElementById('inp-sname').value.trim();
+  const desc=document.getElementById('inp-sdesc').value.trim();
+  const textContent=document.getElementById('inp-text-content').value.trim();
+  if(!name){showToast('工程名を入力してください');return;}
+  const order=manuals[curM].steps.length;
+  await db.collection('manuals').doc(curMId).collection('steps').add({
+    name, desc, status: textContent?'done':'todo', contentType:curCtype,
+    dur:null, transcript:null, videoUrl:null,
+    textContent: textContent||null,
+    order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  resetStepSheet();
+  hideSheet('sheet-step');
+  showToast('テキスト工程を追加しました ✓');
+}
+
+function resetStepSheet(){
+  document.getElementById('inp-sname').value='';
+  document.getElementById('inp-sdesc').value='';
+  document.getElementById('inp-text-content').value='';
+  document.getElementById('text-content-grp').style.display='none';
+  curCtype='video';
+  document.querySelectorAll('.ctype-btn').forEach((b,i)=>b.classList.toggle('sel',i===0));
+  document.getElementById('btn-add-rec').textContent='追加してすぐ録画 🎥';
+  document.getElementById('btn-add-rec').onclick=addStepRec;
 }
 
 /* ── ICON ── */
@@ -1897,12 +1926,19 @@ function selCtype(el,val){
   el.classList.add('sel');
   curCtype=val;
   const recBtn=document.getElementById('btn-add-rec');
+  const textGrp=document.getElementById('text-content-grp');
   if(val==='text'){
-    recBtn.textContent='テキストで追加 📄';
-    recBtn.onclick=addStepOnly;
+    recBtn.textContent='テキスト工程を追加 📄';
+    recBtn.onclick=addStepWithText;
+    textGrp.style.display='';
+  } else if(val==='both'){
+    recBtn.textContent='追加してすぐ録画 🎥';
+    recBtn.onclick=addStepRec;
+    textGrp.style.display='';
   } else {
     recBtn.textContent='追加してすぐ録画 🎥';
     recBtn.onclick=addStepRec;
+    textGrp.style.display='none';
   }
 }
 
