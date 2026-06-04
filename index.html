@@ -1535,7 +1535,6 @@ function renderHome(){
 
     teams.forEach(team=>{
       const items=deptGroup[team.id]||[];
-      if(items.length===0) return;
       const key=`${dept.id}_${team.id}`;
       const isOpen=expandedTeams.has(key);
       const tEl=document.createElement('div');
@@ -1554,11 +1553,18 @@ function renderHome(){
 
       // マニュアル一覧（展開時のみ表示）
       if(isOpen){
-        const mList=document.createElement('div');
-        mList.className='team-manuals';
-        mList.style.marginTop='6px';
-        items.forEach(({m,i})=>mList.appendChild(makeManualCard(m,i)));
-        tEl.appendChild(mList);
+        if(items.length===0){
+          const empty=document.createElement('div');
+          empty.style.cssText='font-size:12px;color:var(--text3);padding:10px 12px;margin-top:4px;background:var(--bg3);border-radius:8px;text-align:center';
+          empty.textContent='マニュアルがまだありません';
+          tEl.appendChild(empty);
+        } else {
+          const mList=document.createElement('div');
+          mList.className='team-manuals';
+          mList.style.marginTop='6px';
+          items.forEach(({m,i})=>mList.appendChild(makeManualCard(m,i)));
+          tEl.appendChild(mList);
+        }
       }
       dEl.appendChild(tEl);
     });
