@@ -1968,6 +1968,15 @@ async function uploadTempFiles(manualId, stepId){
   return attachments;
 }
 
+/* ── 工程を再取得してUIを更新 ── */
+async function refreshSteps(){
+  if(!curMId) return;
+  const snap = await db.collection('manuals').doc(curMId)
+    .collection('steps').orderBy('order','asc').get();
+  manuals[curM].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
+  renderStepsList();
+}
+
 async function addStepRec(){
   if(!curMId){showToast('マニュアルを開いてから工程を追加してください');return;}
   const name=document.getElementById('inp-sname').value.trim();
@@ -1983,8 +1992,10 @@ async function addStepRec(){
     });
     resetStepSheet();
     hideSheet('sheet-step');
+    await refreshSteps();
     curSId=ref.id;
-    startRec(order);
+    const idx=manuals[curM].steps.findIndex(s=>s.id===ref.id);
+    startRec(idx>=0?idx:order);
   }catch(e){showToast('エラー: '+e.message);}
 }
 
@@ -2003,6 +2014,7 @@ async function addStepOnly(){
     });
     resetStepSheet();
     hideSheet('sheet-step');
+    await refreshSteps();
     showToast('工程を追加しました');
   }catch(e){showToast('エラー: '+e.message);}
 }
@@ -2019,11 +2031,9 @@ async function addStepWithText(){
       name, desc, contentType:curCtype,
       dur:null, transcript:null, videoUrl:null,
       textContent:textContent||null,
-      attachments:[], order,
-      status:'todo',
+      attachments:[], order, status:'todo',
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    // ファイルアップロード
     const attachments=await uploadTempFiles(curMId, ref.id);
     const isDone=!!(textContent||attachments.length);
     if(attachments.length>0||isDone){
@@ -2033,6 +2043,7 @@ async function addStepWithText(){
     }
     resetStepSheet();
     hideSheet('sheet-step');
+    await refreshSteps();
     showToast('工程を追加しました ✓');
   }catch(e){showToast('エラー: '+e.message);}
 }
