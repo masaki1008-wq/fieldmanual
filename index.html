@@ -646,7 +646,7 @@ body{
     </button>
     <span class="tb-title" id="tb-title">FieldManual</span>
     <div class="tb-actions" id="tb-acts">
-      <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-dept')">🏢 部門</button>
+      <button class="btn btn-ghost btn-sm" onclick="openDeptSheet()">🏢 部門</button>
       <button class="btn btn-accent" onclick="showSheet('sheet-new')">＋ 新規</button>
     </div>
   </div>
@@ -903,6 +903,45 @@ body{
   </div>
 </div>
 
+<!-- SHEET: マニュアル編集 -->
+<div class="sheet-ov" id="sheet-edit-manual" onclick="if(event.target===this)hideSheet('sheet-edit-manual')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">マニュアルを編集</div>
+    <div class="inp-g"><label class="inp-lbl">マニュアル名 *</label><input class="inp-f" id="edit-mname" type="text" autocomplete="off"></div>
+    <div class="inp-g">
+      <label class="inp-lbl">部門</label>
+      <select class="inp-f" id="edit-dept-sel" onchange="onEditDeptSelChange()">
+        <option value="">部門を選択...</option>
+      </select>
+    </div>
+    <div class="inp-g" id="edit-team-grp" style="display:none">
+      <label class="inp-lbl">チーム</label>
+      <select class="inp-f" id="edit-team-sel">
+        <option value="">チームを選択...</option>
+      </select>
+    </div>
+    <div class="inp-g">
+      <label class="inp-lbl">アイコン</label>
+      <div class="icon-grid" id="edit-icon-grid">
+        <div class="icon-opt sel" onclick="selEditIcon(this,'🏭')">🏭</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'📦')">📦</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'🔧')">🔧</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'⚡')">⚡</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'🛡️')">🛡️</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'📋')">📋</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'🚛')">🚛</div>
+        <div class="icon-opt" onclick="selEditIcon(this,'🧹')">🧹</div>
+      </div>
+    </div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" onclick="saveManualEdit()">変更を保存</button>
+      <button class="btn-s bsg" style="color:var(--accent)" onclick="deleteManual()">マニュアルを削除</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-edit-manual')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- SHEET: 工程編集 -->
 <div class="sheet-ov" id="sheet-edit-step" onclick="if(event.target===this)hideSheet('sheet-edit-step')">
   <div class="sheet-box">
@@ -1088,31 +1127,43 @@ function onDeptSelChange(){
 }
 
 /* ── 部門管理UI ── */
+function openDeptSheet(){
+  renderDeptMgr();
+  showSheet('sheet-dept');
+}
+
 function renderDeptMgr(){
   const list = document.getElementById('dept-mgr-list');
   if(!list) return;
   list.innerHTML = '';
+  if(departments.length===0){
+    list.innerHTML='<div style="text-align:center;padding:20px;color:var(--text3);font-size:13px">部門がまだありません</div>';
+    return;
+  }
   departments.forEach((dept, di) => {
     const dEl = document.createElement('div');
     dEl.style.cssText = 'background:var(--bg3);border-radius:12px;padding:12px;margin-bottom:10px';
     dEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:14px;font-weight:700;flex:1">${dept.name}</span>
-        <button class="team-act-btn" onclick="moveDept('${dept.id}',-1)" title="上へ">↑</button>
-        <button class="team-act-btn" onclick="moveDept('${dept.id}',1)" title="下へ">↓</button>
+        <span style="font-size:14px;font-weight:700;flex:1">🏢 ${dept.name}</span>
+        <button class="team-act-btn" onclick="moveDept('${dept.id}',-1)">↑</button>
+        <button class="team-act-btn" onclick="moveDept('${dept.id}',1)">↓</button>
         <button class="team-act-btn" onclick="promptRenameDept('${dept.id}','${dept.name.replace(/'/g,"\\'")}')">✏️</button>
         <button class="team-act-btn" onclick="deleteDept('${dept.id}')" style="color:var(--accent)">🗑</button>
       </div>
-      <div id="team-list-${dept.id}"></div>
+      <div id="team-list-${dept.id}" style="margin-bottom:6px"></div>
       <button class="add-team-row" onclick="promptAddTeam('${dept.id}')">＋ チームを追加</button>
     `;
     list.appendChild(dEl);
     const teamList = dEl.querySelector(`#team-list-${dept.id}`);
-    dept.teams.forEach((team, ti) => {
+    if(dept.teams.length===0){
+      teamList.innerHTML='<div style="font-size:11px;color:var(--text3);padding:4px 8px">チームなし</div>';
+    }
+    dept.teams.forEach((team) => {
       const tEl = document.createElement('div');
-      tEl.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff;border-radius:8px;margin-bottom:5px';
+      tEl.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;background:#fff;border-radius:8px;margin-bottom:5px;border:1px solid var(--border)';
       tEl.innerHTML = `
-        <span style="font-size:13px;flex:1">${team.name}</span>
+        <span style="font-size:13px;flex:1">👥 ${team.name}</span>
         <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',-1)">↑</button>
         <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',1)">↓</button>
         <button class="team-act-btn" onclick="promptRenameTeam('${dept.id}','${team.id}','${team.name.replace(/'/g,"\\'")}')">✏️</button>
@@ -1204,6 +1255,102 @@ async function moveTeam(deptId, teamId, dir){
   batch.update(ref.doc(dept.teams[ni].id), { order: idx });
   await batch.commit();
   await refreshDepartments();
+}
+
+/* ── マニュアル編集 ── */
+let editManualIcon='🏭';
+
+function selEditIcon(el,val){
+  document.querySelectorAll('#edit-icon-grid .icon-opt').forEach(o=>o.classList.remove('sel'));
+  el.classList.add('sel');
+  editManualIcon=val;
+}
+
+function onEditDeptSelChange(){
+  const deptId=document.getElementById('edit-dept-sel').value;
+  const grp=document.getElementById('edit-team-grp');
+  const teamSel=document.getElementById('edit-team-sel');
+  if(!deptId){grp.style.display='none';return;}
+  const dept=departments.find(d=>d.id===deptId);
+  teamSel.innerHTML='<option value="">チームを選択...</option>';
+  if(dept&&dept.teams.length>0){
+    dept.teams.forEach(t=>{
+      const opt=document.createElement('option');
+      opt.value=t.id;opt.textContent=t.name;
+      teamSel.appendChild(opt);
+    });
+    grp.style.display='';
+  } else {
+    grp.style.display='none';
+  }
+}
+
+function openManualEdit(){
+  const m=manuals[curM];
+  document.getElementById('edit-mname').value=m.name||'';
+  editManualIcon=m.icon||'🏭';
+  // アイコン選択状態を更新
+  document.querySelectorAll('#edit-icon-grid .icon-opt').forEach(el=>{
+    el.classList.toggle('sel',el.textContent===m.icon);
+  });
+  // 部門セレクト
+  const deptSel=document.getElementById('edit-dept-sel');
+  deptSel.innerHTML='<option value="">部門を選択...</option>';
+  departments.forEach(d=>{
+    const opt=document.createElement('option');
+    opt.value=d.id;opt.textContent=d.name;
+    deptSel.appendChild(opt);
+  });
+  deptSel.value=m.deptId||'';
+  onEditDeptSelChange();
+  if(m.teamId) document.getElementById('edit-team-sel').value=m.teamId;
+  showSheet('sheet-edit-manual');
+}
+
+async function saveManualEdit(){
+  const name=document.getElementById('edit-mname').value.trim();
+  const deptId=document.getElementById('edit-dept-sel').value;
+  const teamId=document.getElementById('edit-team-sel').value;
+  if(!name){showToast('マニュアル名を入力してください');return;}
+  const dept=departments.find(d=>d.id===deptId);
+  const team=dept?.teams.find(t=>t.id===teamId);
+  try{
+    await db.collection('manuals').doc(curMId).update({
+      name, icon:editManualIcon,
+      deptId:deptId||null, deptName:dept?.name||null,
+      teamId:teamId||null, teamName:team?.name||null,
+      updatedAt:firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // ローカル状態を即時更新
+    const m=manuals[curM];
+    m.name=name; m.icon=editManualIcon;
+    m.deptId=deptId||null; m.deptName=dept?.name||null;
+    m.teamId=teamId||null; m.teamName=team?.name||null;
+    hideSheet('sheet-edit-manual');
+    // トップバーを更新
+    setTB(name,
+      `<button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+       <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
+       <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
+      goHome);
+    renderHome();
+    showToast('マニュアルを更新しました ✓');
+  }catch(e){showToast('エラー: '+e.message);}
+}
+
+async function deleteManual(){
+  if(!confirm('このマニュアルを削除しますか？\n工程データもすべて削除されます。')) return;
+  try{
+    // 工程をすべて削除
+    const steps=await db.collection('manuals').doc(curMId).collection('steps').get();
+    const batch=db.batch();
+    steps.forEach(s=>batch.delete(s.ref));
+    await batch.commit();
+    await db.collection('manuals').doc(curMId).delete();
+    hideSheet('sheet-edit-manual');
+    goHome();
+    showToast('マニュアルを削除しました');
+  }catch(e){showToast('エラー: '+e.message);}
 }
 
 /* ── 工程編集 ── */
@@ -1451,7 +1598,8 @@ function openManual(idx){
   curM=idx; curMId=manuals[idx].id; curS=null; curSId=null;
   const m=manuals[idx];
   setTB(m.name,
-    `<button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
+    `<button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+     <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
      <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
     goHome);
   renderStepsList();
