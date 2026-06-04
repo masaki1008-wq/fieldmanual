@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<title>FieldManual — 現場動画マニュアル</title>
+<title>西田精麦 動画マニュアル</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
@@ -589,33 +589,51 @@ body{
 <!-- LOGIN SCREEN -->
 <div id="login-screen" style="
   position:fixed;inset:0;z-index:9999;
-  background:var(--bg);display:flex;align-items:center;justify-content:center;
+  background:linear-gradient(160deg,#f8f6f0 0%,#eef5fb 100%);
+  display:flex;align-items:center;justify-content:center;
 ">
   <div style="
-    background:#fff;border-radius:24px;padding:40px 32px;
-    box-shadow:0 8px 40px rgba(0,0,0,.12);width:min(360px,90vw);text-align:center;
+    background:#fff;border-radius:28px;padding:44px 36px;
+    box-shadow:0 8px 48px rgba(0,0,0,.1);width:min(380px,92vw);text-align:center;
   ">
-    <div style="font-size:42px;margin-bottom:12px">📋</div>
-    <div style="font-size:22px;font-weight:700;margin-bottom:6px">Field<span style="color:var(--accent)">Manual</span></div>
-    <div style="font-size:13px;color:var(--text3);margin-bottom:32px">現場動画マニュアルシステム</div>
+    <!-- 西田精麦ロゴ -->
+    <div style="margin:0 auto 16px;width:80px;height:64px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 165" fill="none" style="width:100%;height:100%">
+        <polyline points="8,12 100,90 192,12" stroke="#E8771E" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="8,50 100,128 192,50" stroke="#2D8C38" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="8,88 100,166 192,88" stroke="#1A9DD4" stroke-width="22" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <div style="font-size:11px;font-weight:700;letter-spacing:2px;color:#888;margin-bottom:4px">NISHIDA SEIMUGI</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:4px;color:#1a1a0f">西田精麦</div>
+    <div style="font-size:14px;font-weight:700;color:#444;margin-bottom:28px">動画マニュアル</div>
     <button id="btn-google-login" onclick="loginWithGoogle()" style="
-      width:100%;padding:14px;border-radius:12px;border:1.5px solid var(--border2);
+      width:100%;padding:15px;border-radius:14px;border:1.5px solid #ddd;
       background:#fff;font-size:14px;font-family:var(--font);font-weight:700;
       cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;
-      margin-bottom:12px;transition:background .15s;
+      margin-bottom:12px;transition:background .15s;-webkit-tap-highlight-color:transparent;
     ">
       <img src="https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg" width="20" height="20">
       Googleでログイン
     </button>
-    <div style="font-size:11px;color:var(--text3)">社内メンバーのみアクセス可能です</div>
+    <div id="login-msg" style="font-size:11px;color:#aaa">社内メンバーのみアクセス可能です</div>
   </div>
 </div>
 
 <!-- DESKTOP SIDEBAR -->
 <aside class="sidebar" id="desktop-sidebar">
   <div class="sidebar-logo">
-    <div class="logo-mark">Field<em>Manual</em></div>
-    <div class="logo-sub">現場動画マニュアルシステム</div>
+    <div style="display:flex;align-items:center;gap:10px">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 165" fill="none" style="width:32px;height:26px;flex-shrink:0">
+        <polyline points="8,12 100,90 192,12" stroke="#E8771E" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="8,50 100,128 192,50" stroke="#2D8C38" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        <polyline points="8,88 100,166 192,88" stroke="#1A9DD4" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <div>
+        <div class="logo-mark" style="font-size:14px">西田精麦</div>
+        <div class="logo-sub">動画マニュアル</div>
+      </div>
+    </div>
   </div>
   <nav class="sidebar-nav">
     <div class="nav-label">メニュー</div>
@@ -644,7 +662,7 @@ body{
     <button class="tb-hamburger" onclick="openDrawer()">
       <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
     </button>
-    <span class="tb-title" id="tb-title">FieldManual</span>
+    <span class="tb-title" id="tb-title">西田精麦 動画マニュアル</span>
     <div class="tb-actions" id="tb-acts">
       <button class="btn btn-ghost btn-sm" onclick="openDeptSheet()">🏢 部門</button>
       <button class="btn btn-accent" onclick="showSheet('sheet-new')">＋ 新規</button>
@@ -804,8 +822,17 @@ body{
   <div class="drawer-bd" onclick="closeDrawer()"></div>
   <div class="drawer-panel">
     <div class="sidebar-logo">
-      <div class="logo-mark">Field<em>Manual</em></div>
-      <div class="logo-sub">現場動画マニュアルシステム</div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 165" fill="none" style="width:32px;height:26px;flex-shrink:0">
+          <polyline points="8,12 100,90 192,12" stroke="#E8771E" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="8,50 100,128 192,50" stroke="#2D8C38" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+          <polyline points="8,88 100,166 192,88" stroke="#1A9DD4" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <div>
+          <div class="logo-mark" style="font-size:14px">西田精麦</div>
+          <div class="logo-sub">動画マニュアル</div>
+        </div>
+      </div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-label">メニュー</div>
@@ -1016,12 +1043,30 @@ let currentUser = null;
 
 async function loginWithGoogle(){
   const provider = new firebase.auth.GoogleAuthProvider();
+  document.getElementById('login-msg').textContent = 'ログイン中...';
   try {
-    await auth.signInWithPopup(provider);
+    if(isMobile()){
+      // スマホはリダイレクト方式（ポップアップがブロックされるため）
+      await auth.signInWithRedirect(provider);
+    } else {
+      await auth.signInWithPopup(provider);
+    }
   } catch(e) {
+    document.getElementById('login-msg').textContent = '社内メンバーのみアクセス可能です';
     showToast('ログインに失敗しました: ' + e.message);
   }
 }
+
+// リダイレクト後の結果処理（スマホ用）
+auth.getRedirectResult().then(result => {
+  if(result && result.user){
+    // onAuthStateChangedで処理されるため何もしない
+  }
+}).catch(e => {
+  if(e.code && e.code !== 'auth/no-current-user'){
+    showToast('ログインエラー: ' + e.message);
+  }
+});
 
 auth.onAuthStateChanged(async user => {
   currentUser = user;
@@ -1464,7 +1509,7 @@ function setTB(title,actsHTML,backFn){
 
 /* ── HOME ── */
 function goHome(){
-  setTB('FieldManual','<button class="btn btn-accent" onclick="showSheet(\'sheet-new\')">＋ 新規</button>',null);
+  setTB('西田精麦 動画マニュアル','<button class="btn btn-ghost btn-sm" onclick="openDeptSheet()">🏢 部門</button><button class="btn btn-accent" onclick="showSheet(\'sheet-new\')">＋ 新規</button>',null);
   renderHome();showScreen('home');refreshNavLinks();
 }
 
