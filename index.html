@@ -511,6 +511,77 @@ body{
 ::-webkit-scrollbar{width:4px}
 ::-webkit-scrollbar-track{background:transparent}
 ::-webkit-scrollbar-thumb{background:var(--border2);border-radius:2px}
+
+/* ── 部門・チーム階層 ── */
+.dept-section{margin-bottom:20px}
+.dept-header{
+  display:flex;align-items:center;gap:10px;
+  padding:11px 14px;border-radius:14px;
+  background:var(--text);color:#fff;
+  margin-bottom:8px;
+}
+.dept-name{font-size:14px;font-weight:700;flex:1}
+.dept-acts{display:flex;gap:5px}
+.dept-act-btn{
+  width:28px;height:28px;border-radius:8px;border:none;cursor:pointer;
+  background:rgba(255,255,255,.15);color:#fff;font-size:13px;
+  display:flex;align-items:center;justify-content:center;
+}
+.dept-act-btn:active{background:rgba(255,255,255,.3)}
+.team-section{margin-left:10px;margin-bottom:10px}
+.team-header{
+  display:flex;align-items:center;gap:8px;
+  padding:8px 12px;border-radius:10px;
+  background:var(--bg3);border:1px solid var(--border);
+  margin-bottom:6px;
+}
+.team-name{font-size:13px;font-weight:700;flex:1;color:var(--text2)}
+.team-act-btn{
+  width:24px;height:24px;border-radius:6px;border:none;cursor:pointer;
+  background:var(--border2);color:var(--text2);font-size:11px;
+  display:flex;align-items:center;justify-content:center;
+}
+.team-manuals{margin-left:10px;display:flex;flex-direction:column;gap:8px;margin-bottom:6px}
+@media(min-width:768px){.team-manuals{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
+.add-team-row{
+  border:1.5px dashed var(--border2);border-radius:10px;
+  padding:8px 12px;cursor:pointer;color:var(--text3);
+  font-size:12px;font-weight:500;margin-bottom:6px;margin-left:10px;
+  display:flex;align-items:center;gap:6px;background:transparent;
+  transition:background .12s;
+}
+.add-team-row:active{background:var(--bg3)}
+.add-dept-row{
+  border:2px dashed var(--border2);border-radius:14px;
+  padding:14px;cursor:pointer;color:var(--text2);
+  font-size:13px;font-weight:500;margin-top:8px;
+  display:flex;align-items:center;justify-content:center;gap:8px;
+  background:transparent;transition:background .12s;
+}
+.add-dept-row:active{background:var(--bg3)}
+
+/* ── コンテンツタイプ選択 ── */
+.ctype-row{display:flex;gap:7px;flex-wrap:wrap}
+.ctype-btn{
+  flex:1;padding:10px 6px;border-radius:10px;border:1.5px solid var(--border);
+  background:var(--bg3);color:var(--text2);font-size:12px;font-family:var(--font);
+  font-weight:700;cursor:pointer;text-align:center;transition:all .12s;min-width:70px;
+}
+.ctype-btn.sel{border-color:var(--accent);background:var(--accent-l);color:var(--accent)}
+
+/* ── テキストマニュアル ── */
+.text-manual-block{
+  background:var(--bg2);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:16px;margin-bottom:16px;
+  box-shadow:var(--shadow);
+}
+.text-manual-lbl{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:8px}
+.text-manual-area{
+  width:100%;min-height:160px;background:var(--bg3);border:1.5px solid var(--border);
+  border-radius:10px;padding:12px;font-size:13px;font-family:var(--font);
+  line-height:1.8;color:var(--text);outline:none;resize:vertical;
+}
+.text-manual-area:focus{border-color:var(--accent);background:#fff}
 </style>
 </head>
 <body>
@@ -575,6 +646,7 @@ body{
     </button>
     <span class="tb-title" id="tb-title">FieldManual</span>
     <div class="tb-actions" id="tb-acts">
+      <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-dept')">🏢 部門</button>
       <button class="btn btn-accent" onclick="showSheet('sheet-new')">＋ 新規</button>
     </div>
   </div>
@@ -754,7 +826,18 @@ body{
     <div class="sheet-handle"></div>
     <div class="sheet-title">新しいマニュアルを作成</div>
     <div class="inp-g"><label class="inp-lbl">マニュアル名 *</label><input class="inp-f" id="inp-name" type="text" placeholder="例：機械メンテナンス手順" autocomplete="off"></div>
-    <div class="inp-g"><label class="inp-lbl">部門・カテゴリ</label><input class="inp-f" id="inp-dept" type="text" placeholder="例：製造部・設備管理" autocomplete="off"></div>
+    <div class="inp-g">
+      <label class="inp-lbl">部門 *</label>
+      <select class="inp-f" id="inp-dept-sel" onchange="onDeptSelChange()">
+        <option value="">部門を選択...</option>
+      </select>
+    </div>
+    <div class="inp-g" id="inp-team-grp" style="display:none">
+      <label class="inp-lbl">チーム</label>
+      <select class="inp-f" id="inp-team-sel">
+        <option value="">チームを選択...</option>
+      </select>
+    </div>
     <div class="inp-g">
       <label class="inp-lbl">アイコン</label>
       <div class="icon-grid">
@@ -782,10 +865,44 @@ body{
     <div class="sheet-title">工程を追加</div>
     <div class="inp-g"><label class="inp-lbl">工程名 *</label><input class="inp-f" id="inp-sname" type="text" placeholder="例：安全確認・保護具の着用" autocomplete="off"></div>
     <div class="inp-g"><label class="inp-lbl">説明（任意）</label><input class="inp-f" id="inp-sdesc" type="text" placeholder="ポイントや注意事項" autocomplete="off"></div>
-    <div class="sheet-btns">
-      <button class="btn-s bsa" onclick="addStepRec()">追加してすぐ録画 🎥</button>
-      <button class="btn-s bsg" onclick="addStepOnly()">動画なしで追加</button>
+    <div class="inp-g">
+      <label class="inp-lbl">コンテンツタイプ</label>
+      <div class="ctype-row">
+        <button class="ctype-btn sel" onclick="selCtype(this,'video')">🎥 動画</button>
+        <button class="ctype-btn" onclick="selCtype(this,'text')">📄 テキスト</button>
+        <button class="ctype-btn" onclick="selCtype(this,'both')">🎥+📄 両方</button>
+      </div>
+    </div>
+    <div class="sheet-btns" id="step-btns">
+      <button class="btn-s bsa" id="btn-add-rec" onclick="addStepRec()">追加してすぐ録画 🎥</button>
+      <button class="btn-s bsg" onclick="addStepOnly()">あとで追加</button>
       <button class="btn-s bsg" onclick="hideSheet('sheet-step')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: 部門・チーム管理 -->
+<div class="sheet-ov" id="sheet-dept" onclick="if(event.target===this)hideSheet('sheet-dept')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">部門・チーム管理</div>
+    <div id="dept-mgr-list" style="margin-bottom:14px"></div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" onclick="promptAddDept()">＋ 部門を追加</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-dept')">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- SHEET: 名前入力（汎用） -->
+<div class="sheet-ov" id="sheet-name-input" onclick="if(event.target===this)hideSheet('sheet-name-input')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="name-input-title">名前を入力</div>
+    <div class="inp-g"><input class="inp-f" id="inp-generic-name" type="text" placeholder="" autocomplete="off"></div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" id="btn-name-confirm" onclick="">保存</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-name-input')">キャンセル</button>
     </div>
   </div>
 </div>
@@ -836,7 +953,8 @@ auth.onAuthStateChanged(async user => {
     document.querySelectorAll('.user-av').forEach(el => el.textContent = initials);
     document.querySelectorAll('.user-name').forEach(el => el.textContent = name);
     document.querySelectorAll('.user-role').forEach(el => el.textContent = user.email);
-    // マニュアル一覧をFirestoreからリアルタイム取得
+    // 部門・マニュアルをFirestoreからリアルタイム取得
+    listenDepartments();
     listenManuals();
   } else {
     document.getElementById('login-screen').style.display = 'flex';
@@ -845,7 +963,29 @@ auth.onAuthStateChanged(async user => {
 
 /* ── DATA (Firestore) ── */
 let manuals = [];
+let departments = []; // [{id, name, order, teams:[{id,name,order}]}]
 let unsubManuals = null;
+let unsubDepts = null;
+
+// 部門・チームをリアルタイム取得
+function listenDepartments(){
+  if(unsubDepts) unsubDepts();
+  unsubDepts = db.collection('departments').orderBy('order','asc')
+    .onSnapshot(async snap => {
+      const depts = [];
+      for(const doc of snap.docs){
+        const dept = { id: doc.id, ...doc.data(), teams: [] };
+        const teamsSnap = await db.collection('departments').doc(doc.id)
+          .collection('teams').orderBy('order','asc').get();
+        dept.teams = teamsSnap.docs.map(t => ({ id: t.id, ...t.data() }));
+        depts.push(dept);
+      }
+      departments = depts;
+      renderHome();
+      renderDeptSelects();
+      renderDeptMgr();
+    });
+}
 
 function listenManuals(){
   if(unsubManuals) unsubManuals();
@@ -862,12 +1002,175 @@ function listenManuals(){
       }
       manuals = manualsWithSteps;
       renderHome();
-      // 現在開いているマニュアルを更新
       if(curMId) {
         const idx = manuals.findIndex(m => m.id === curMId);
         if(idx >= 0){ curM = idx; renderStepsList(); }
       }
     });
+}
+
+/* ── 部門・チーム セレクト更新 ── */
+function renderDeptSelects(){
+  const sel = document.getElementById('inp-dept-sel');
+  if(!sel) return;
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">部門を選択...</option>';
+  departments.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d.id; opt.textContent = d.name;
+    sel.appendChild(opt);
+  });
+  if(cur) sel.value = cur;
+  onDeptSelChange();
+}
+
+function onDeptSelChange(){
+  const deptId = document.getElementById('inp-dept-sel').value;
+  const grp = document.getElementById('inp-team-grp');
+  const teamSel = document.getElementById('inp-team-sel');
+  if(!deptId){ grp.style.display='none'; return; }
+  const dept = departments.find(d => d.id === deptId);
+  teamSel.innerHTML = '<option value="">チームを選択...</option>';
+  if(dept && dept.teams.length > 0){
+    dept.teams.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id; opt.textContent = t.name;
+      teamSel.appendChild(opt);
+    });
+    grp.style.display = '';
+  } else {
+    grp.style.display = 'none';
+  }
+}
+
+/* ── 部門管理UI ── */
+function renderDeptMgr(){
+  const list = document.getElementById('dept-mgr-list');
+  if(!list) return;
+  list.innerHTML = '';
+  departments.forEach((dept, di) => {
+    const dEl = document.createElement('div');
+    dEl.style.cssText = 'background:var(--bg3);border-radius:12px;padding:12px;margin-bottom:10px';
+    dEl.innerHTML = `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+        <span style="font-size:14px;font-weight:700;flex:1">${dept.name}</span>
+        <button class="team-act-btn" onclick="moveDept('${dept.id}',-1)" title="上へ">↑</button>
+        <button class="team-act-btn" onclick="moveDept('${dept.id}',1)" title="下へ">↓</button>
+        <button class="team-act-btn" onclick="promptRenameDept('${dept.id}','${dept.name.replace(/'/g,"\\'")}')">✏️</button>
+        <button class="team-act-btn" onclick="deleteDept('${dept.id}')" style="color:var(--accent)">🗑</button>
+      </div>
+      <div id="team-list-${dept.id}"></div>
+      <button class="add-team-row" onclick="promptAddTeam('${dept.id}')">＋ チームを追加</button>
+    `;
+    list.appendChild(dEl);
+    const teamList = dEl.querySelector(`#team-list-${dept.id}`);
+    dept.teams.forEach((team, ti) => {
+      const tEl = document.createElement('div');
+      tEl.style.cssText = 'display:flex;align-items:center;gap:6px;padding:6px 8px;background:#fff;border-radius:8px;margin-bottom:5px';
+      tEl.innerHTML = `
+        <span style="font-size:13px;flex:1">${team.name}</span>
+        <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',-1)">↑</button>
+        <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',1)">↓</button>
+        <button class="team-act-btn" onclick="promptRenameTeam('${dept.id}','${team.id}','${team.name.replace(/'/g,"\\'")}')">✏️</button>
+        <button class="team-act-btn" onclick="deleteTeam('${dept.id}','${team.id}')" style="color:var(--accent)">🗑</button>
+      `;
+      teamList.appendChild(tEl);
+    });
+  });
+}
+
+/* ── 部門CRUD ── */
+function promptAddDept(){
+  showNameInput('部門名を入力', '', async name => {
+    if(!name) return;
+    const order = departments.length;
+    await db.collection('departments').add({
+      name, order,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+      createdBy: currentUser.uid
+    });
+    showToast('部門を追加しました');
+  });
+}
+
+function promptRenameDept(deptId, currentName){
+  showNameInput('部門名を変更', currentName, async name => {
+    if(!name) return;
+    await db.collection('departments').doc(deptId).update({ name });
+    showToast('部門名を変更しました');
+  });
+}
+
+async function deleteDept(deptId){
+  if(!confirm('この部門を削除しますか？')) return;
+  await db.collection('departments').doc(deptId).delete();
+  showToast('部門を削除しました');
+}
+
+async function moveDept(deptId, dir){
+  const idx = departments.findIndex(d => d.id === deptId);
+  const ni = idx + dir;
+  if(ni < 0 || ni >= departments.length) return;
+  const batch = db.batch();
+  batch.update(db.collection('departments').doc(deptId), { order: ni });
+  batch.update(db.collection('departments').doc(departments[ni].id), { order: idx });
+  await batch.commit();
+}
+
+/* ── チームCRUD ── */
+function promptAddTeam(deptId){
+  showNameInput('チーム名を入力', '', async name => {
+    if(!name) return;
+    const dept = departments.find(d => d.id === deptId);
+    const order = dept ? dept.teams.length : 0;
+    await db.collection('departments').doc(deptId).collection('teams').add({
+      name, order,
+      createdAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    showToast('チームを追加しました');
+  });
+}
+
+function promptRenameTeam(deptId, teamId, currentName){
+  showNameInput('チーム名を変更', currentName, async name => {
+    if(!name) return;
+    await db.collection('departments').doc(deptId).collection('teams').doc(teamId).update({ name });
+    showToast('チーム名を変更しました');
+  });
+}
+
+async function deleteTeam(deptId, teamId){
+  if(!confirm('このチームを削除しますか？')) return;
+  await db.collection('departments').doc(deptId).collection('teams').doc(teamId).delete();
+  showToast('チームを削除しました');
+}
+
+async function moveTeam(deptId, teamId, dir){
+  const dept = departments.find(d => d.id === deptId);
+  if(!dept) return;
+  const idx = dept.teams.findIndex(t => t.id === teamId);
+  const ni = idx + dir;
+  if(ni < 0 || ni >= dept.teams.length) return;
+  const batch = db.batch();
+  const ref = db.collection('departments').doc(deptId).collection('teams');
+  batch.update(ref.doc(teamId), { order: ni });
+  batch.update(ref.doc(dept.teams[ni].id), { order: idx });
+  await batch.commit();
+}
+
+/* ── 汎用名前入力 ── */
+let _nameCallback = null;
+function showNameInput(title, defaultVal, callback){
+  document.getElementById('name-input-title').textContent = title;
+  document.getElementById('inp-generic-name').value = defaultVal;
+  _nameCallback = callback;
+  document.getElementById('btn-name-confirm').onclick = () => {
+    const val = document.getElementById('inp-generic-name').value.trim();
+    hideSheet('sheet-name-input');
+    if(_nameCallback) _nameCallback(val);
+  };
+  showSheet('sheet-name-input');
+  setTimeout(() => document.getElementById('inp-generic-name').focus(), 200);
 }
 
 let curM=0, curMId=null, curS=null, curSId=null;
@@ -913,32 +1216,119 @@ function goHome(){
   renderHome();showScreen('home');refreshNavLinks();
 }
 
+function makeManualCard(m, i){
+  const done=m.steps.filter(s=>s.status==='done').length;
+  const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
+  const chips=m.steps.slice(0,3).map(s=>
+    `<span class="chip ${s.status==='done'?'chip-done':'chip-todo'}">${s.status==='done'?'✓':'⬜'} ${s.name}</span>`
+  ).join('');
+  const more=m.steps.length>3?`<span class="chip chip-todo">+${m.steps.length-3}工程</span>`:'';
+  const c=document.createElement('div');
+  c.className='manual-card';
+  c.innerHTML=`
+    <div class="mc-top">
+      <div class="mc-icon" style="background:${m.color}20">${m.icon}</div>
+      <div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-meta">${m.steps.length}工程</div></div>
+      <div class="mc-chev">›</div>
+    </div>
+    <div class="mc-prog">
+      <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${m.color}"></div></div>
+      <div class="prog-lbl"><span>${done} / ${m.steps.length} 工程完了</span><span>${pct}%</span></div>
+    </div>
+    <div class="mc-chips">${chips}${more}</div>
+  `;
+  c.onclick=()=>openManual(i);
+  return c;
+}
+
 function renderHome(){
-  const list=document.getElementById('manual-list');list.innerHTML='';
+  const list=document.getElementById('manual-list');
+  list.innerHTML='';
+
+  // 部門・チームごとにグループ化
+  const byDept={};
+  const noDept=[];
   manuals.forEach((m,i)=>{
-    const done=m.steps.filter(s=>s.status==='done').length;
-    const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
-    const chips=m.steps.slice(0,3).map(s=>
-      `<span class="chip ${s.status==='done'?'chip-done':'chip-todo'}">${s.status==='done'?'✓':'⬜'} ${s.name}</span>`
-    ).join('');
-    const more=m.steps.length>3?`<span class="chip chip-todo">+${m.steps.length-3}工程</span>`:'';
-    const c=document.createElement('div');
-    c.className='manual-card';
-    c.innerHTML=`
-      <div class="mc-top">
-        <div class="mc-icon" style="background:${m.color}20">${m.icon}</div>
-        <div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-meta">${m.dept} · ${m.steps.length}工程</div></div>
-        <div class="mc-chev">›</div>
-      </div>
-      <div class="mc-prog">
-        <div class="prog-bar"><div class="prog-fill" style="width:${pct}%;background:${m.color}"></div></div>
-        <div class="prog-lbl"><span>${done} / ${m.steps.length} 工程完了</span><span>${pct}%</span></div>
-      </div>
-      <div class="mc-chips">${chips}${more}</div>
-    `;
-    c.onclick=()=>openManual(i);
-    list.appendChild(c);
+    if(m.deptId){
+      if(!byDept[m.deptId]) byDept[m.deptId]={};
+      const tk=m.teamId||'_none';
+      if(!byDept[m.deptId][tk]) byDept[m.deptId][tk]=[];
+      byDept[m.deptId][tk].push({m,i});
+    } else {
+      noDept.push({m,i});
+    }
   });
+
+  // 部門順に表示
+  departments.forEach(dept=>{
+    const deptGroup=byDept[dept.id]||{};
+    const dEl=document.createElement('div');
+    dEl.className='dept-section';
+    const header=document.createElement('div');
+    header.className='dept-header';
+    header.innerHTML=`<span class="dept-name">🏢 ${dept.name}</span>`;
+    dEl.appendChild(header);
+
+    // チーム順に表示
+    const teams=[...dept.teams,{id:'_none',name:'未所属'}];
+    teams.forEach(team=>{
+      const items=deptGroup[team.id]||[];
+      if(items.length===0&&team.id==='_none') return;
+      const tEl=document.createElement('div');
+      tEl.className='team-section';
+      tEl.innerHTML=`<div class="team-header"><span class="team-name">👥 ${team.name}</span><span style="font-size:11px;color:var(--text3)">${items.length}件</span></div>`;
+      const mList=document.createElement('div');
+      mList.className='team-manuals';
+      items.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
+      tEl.appendChild(mList);
+      dEl.appendChild(tEl);
+    });
+
+    // チーム未設定のマニュアル
+    const noTeam=deptGroup['_none']||[];
+    if(noTeam.length>0&&!dept.teams.some(t=>t.id==='_none')){
+      const tEl=document.createElement('div');
+      tEl.className='team-section';
+      tEl.innerHTML=`<div class="team-header"><span class="team-name">👥 未所属</span></div>`;
+      const mList=document.createElement('div');
+      mList.className='team-manuals';
+      noTeam.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
+      tEl.appendChild(mList);
+      dEl.appendChild(tEl);
+    }
+
+    list.appendChild(dEl);
+  });
+
+  // 部門未設定のマニュアル
+  if(noDept.length>0){
+    const dEl=document.createElement('div');
+    dEl.className='dept-section';
+    dEl.innerHTML=`<div class="dept-header"><span class="dept-name">📋 未分類</span></div>`;
+    const mList=document.createElement('div');
+    mList.className='team-manuals';
+    mList.style.marginTop='8px';
+    noDept.forEach(({m,i})=> mList.appendChild(makeManualCard(m,i)));
+    dEl.appendChild(mList);
+    list.appendChild(dEl);
+  }
+
+  // 部門もマニュアルも0件の場合
+  if(departments.length===0&&manuals.length===0){
+    list.innerHTML=`<div style="text-align:center;padding:40px;color:var(--text3)">
+      <div style="font-size:40px;margin-bottom:12px">📋</div>
+      <div style="font-size:14px;font-weight:700;margin-bottom:6px">まず部門を作成してください</div>
+      <div style="font-size:12px">上の「🏢 部門」ボタンから部門・チームを追加できます</div>
+    </div>`;
+  }
+
+  // 部門追加ボタン
+  const addDeptBtn=document.createElement('div');
+  addDeptBtn.className='add-dept-row';
+  addDeptBtn.innerHTML='<span>🏢</span> 部門を追加';
+  addDeptBtn.onclick=()=>{ showSheet('sheet-dept'); };
+  list.appendChild(addDeptBtn);
+
   document.getElementById('st-m').textContent=manuals.length;
   document.getElementById('st-d').textContent=manuals.reduce((a,m)=>a+m.steps.filter(s=>s.status==='done').length,0);
   refreshNavLinks();
@@ -1027,53 +1417,88 @@ function selectStep(idx){
 function renderDetailInto(container,idx){
   const m=manuals[curM];
   const step=m.steps[idx];
-  let vid='';
-  if(step.status==='done'){
-    const hasVideo=!!step.videoUrl;
-    vid=`
-      <div class="video-block">
-        <div class="video-thumb" id="vthumb-${idx}" onclick="playStepVideo(${idx})" style="cursor:pointer">
-          <div class="video-thumb-emoji">${m.icon}</div>
-          <div class="play-btn">▶</div>
-        </div>
-        <video id="vplayer-${idx}" controls playsinline
-          style="display:none;width:100%;max-height:220px;background:#000;border-radius:0"
-          ${hasVideo?'src="'+step.videoUrl+'"':''}></video>
-        <div class="video-meta">
-          <span class="video-dur">⏱ ${step.dur}</span>
-          <div class="video-acts">
-            <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})">撮り直す</button>
-            <button class="btn btn-ghost btn-sm" onclick="showToast('リンクをコピーしました')">共有</button>
+  const ctype=step.contentType||'video';
+  const showVideo=(ctype==='video'||ctype==='both');
+  const showText=(ctype==='text'||ctype==='both');
+
+  let videoBlock='';
+  if(showVideo){
+    if(step.videoUrl){
+      videoBlock=`
+        <div class="video-block">
+          <div class="video-thumb" id="vthumb-${idx}" onclick="playStepVideo(${idx})" style="cursor:pointer">
+            <div class="video-thumb-emoji">${m.icon}</div>
+            <div class="play-btn">▶</div>
           </div>
-        </div>
-        <div class="transcript-block">
-          <div class="transcript-lbl">📝 文字起こし（タップして編集）</div>
-          <div class="transcript-text" contenteditable="true">${step.transcript}</div>
-        </div>
-      </div>
-    `;
-  } else {
-    vid=`
-      <div class="record-cta" onclick="startRec(${idx})">
-        <div class="rc-icon">🎥</div>
-        <div class="rc-title">タップして録画開始</div>
-        <div class="rc-sub">この工程の作業を動画で撮影します</div>
-      </div>
-    `;
+          <video id="vplayer-${idx}" controls playsinline
+            style="display:none;width:100%;max-height:220px;background:#000;border-radius:0"
+            src="${step.videoUrl}"></video>
+          <div class="video-meta">
+            <span class="video-dur">⏱ ${step.dur||'--'}</span>
+            <div class="video-acts">
+              <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})">撮り直す</button>
+            </div>
+          </div>
+          ${step.transcript?`<div class="transcript-block">
+            <div class="transcript-lbl">📝 文字起こし</div>
+            <div class="transcript-text" contenteditable="true">${step.transcript}</div>
+          </div>`:''}
+        </div>`;
+    } else {
+      videoBlock=`
+        <div class="record-cta" onclick="startRec(${idx})">
+          <div class="rc-icon">🎥</div>
+          <div class="rc-title">タップして録画開始</div>
+          <div class="rc-sub">この工程の作業を動画で撮影します</div>
+        </div>`;
+    }
   }
+
+  let textBlock='';
+  if(showText){
+    textBlock=`
+      <div class="text-manual-block">
+        <div class="text-manual-lbl">📄 テキストマニュアル</div>
+        <textarea class="text-manual-area" id="text-area-${idx}" placeholder="手順・注意事項をここに記述してください...">${step.textContent||''}</textarea>
+        <button class="btn btn-accent btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
+      </div>`;
+  }
+
+  const recBtn=showVideo?`<button class="btn btn-ghost btn-sm" onclick="startRec(${idx})" style="color:var(--accent);font-weight:700">🎥 録画</button>`:'';
+
   container.innerHTML=`
     <div class="sd-hdr">
       <div class="sd-num">${idx+1}</div>
-      <div><div class="sd-title">${step.name}</div>${step.desc?`<div class="sd-desc">${step.desc}</div>`:''}</div>
+      <div>
+        <div class="sd-title">${step.name}</div>
+        ${step.desc?`<div class="sd-desc">${step.desc}</div>`:''}
+        <div style="margin-top:4px">
+          <span style="font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)">
+            ${ctype==='video'?'🎥 動画':ctype==='text'?'📄 テキスト':'🎥+📄 両方'}
+          </span>
+        </div>
+      </div>
     </div>
-    ${vid}
+    ${videoBlock}
+    ${textBlock}
     <div class="step-acts">
       <button class="btn btn-ghost btn-sm" onclick="moveStep(${idx},-1)">↑ 上へ</button>
       <button class="btn btn-ghost btn-sm" onclick="moveStep(${idx},1)">↓ 下へ</button>
-      <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})" style="color:var(--accent);font-weight:700">🎥 録画</button>
+      ${recBtn}
       <button class="btn btn-ghost btn-sm" onclick="deleteStep(${idx})" style="color:#c23f00;margin-left:auto">削除</button>
     </div>
   `;
+}
+
+async function saveTextContent(idx){
+  const step=manuals[curM].steps[idx];
+  const text=document.getElementById('text-area-'+idx).value.trim();
+  await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+    textContent: text,
+    status: text?'done':'todo',
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  showToast('テキストを保存しました ✓');
 }
 
 function playStepVideo(idx){
@@ -1388,23 +1813,32 @@ function doPublish(){
 /* ── NEW MANUAL ── */
 async function createManual(){
   const name=document.getElementById('inp-name').value.trim();
-  const dept=document.getElementById('inp-dept').value.trim();
+  const deptId=document.getElementById('inp-dept-sel').value;
+  const teamId=document.getElementById('inp-team-sel').value;
   if(!name){showToast('マニュアル名を入力してください');return;}
+  if(!deptId){showToast('部門を選択してください');return;}
   if(!currentUser){showToast('ログインが必要です');return;}
+  const dept=departments.find(d=>d.id===deptId);
+  const team=dept?.teams.find(t=>t.id===teamId);
   const cols=['var(--accent)','var(--green)','var(--blue)','var(--amber)'];
   const color=cols[manuals.length%cols.length];
   const ref = await db.collection('manuals').add({
-    name, icon:selIco, dept:dept||'未設定', color,
+    name, icon:selIco, color,
+    deptId, deptName: dept?.name||'',
+    teamId: teamId||null, teamName: team?.name||null,
     createdBy: currentUser.uid,
     createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   document.getElementById('inp-name').value='';
-  document.getElementById('inp-dept').value='';
+  document.getElementById('inp-dept-sel').value='';
+  document.getElementById('inp-team-sel').value='';
+  document.getElementById('inp-team-grp').style.display='none';
   hideSheet('sheet-new');
-  // 新しいマニュアルを開く
-  const idx = manuals.findIndex(m => m.id === ref.id);
-  if(idx >= 0) openManual(idx);
   showToast('マニュアルを作成しました');
+  setTimeout(()=>{
+    const idx=manuals.findIndex(m=>m.id===ref.id);
+    if(idx>=0) openManual(idx);
+  }, 500);
 }
 
 /* ── ADD STEP ── */
@@ -1414,13 +1848,13 @@ async function addStepRec(){
   if(!name){showToast('工程名を入力してください');return;}
   const order=manuals[curM].steps.length;
   const ref = await db.collection('manuals').doc(curMId).collection('steps').add({
-    name, desc, status:'todo', dur:null, transcript:null, videoUrl:null,
+    name, desc, status:'todo', contentType:curCtype,
+    dur:null, transcript:null, videoUrl:null, textContent:null,
     order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   document.getElementById('inp-sname').value='';
   document.getElementById('inp-sdesc').value='';
   hideSheet('sheet-step');
-  const idx=manuals[curM].steps.length; // スナップショット更新後のインデックス
   curSId=ref.id;
   startRec(order);
 }
@@ -1431,11 +1865,14 @@ async function addStepOnly(){
   if(!name){showToast('工程名を入力してください');return;}
   const order=manuals[curM].steps.length;
   await db.collection('manuals').doc(curMId).collection('steps').add({
-    name, desc, status:'todo', dur:null, transcript:null, videoUrl:null,
+    name, desc, status:'todo', contentType:curCtype,
+    dur:null, transcript:null, videoUrl:null, textContent:null,
     order, createdAt: firebase.firestore.FieldValue.serverTimestamp()
   });
   document.getElementById('inp-sname').value='';
   document.getElementById('inp-sdesc').value='';
+  curCtype='video';
+  document.querySelectorAll('.ctype-btn').forEach((b,i)=>b.classList.toggle('sel',i===0));
   hideSheet('sheet-step');
   showToast('工程を追加しました');
 }
@@ -1444,6 +1881,22 @@ async function addStepOnly(){
 function selIcon(el,val){
   document.querySelectorAll('.icon-opt').forEach(o=>o.classList.remove('sel'));
   el.classList.add('sel');selIco=val;
+}
+
+/* ── コンテンツタイプ ── */
+let curCtype='video';
+function selCtype(el,val){
+  document.querySelectorAll('.ctype-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  curCtype=val;
+  const recBtn=document.getElementById('btn-add-rec');
+  if(val==='text'){
+    recBtn.textContent='テキストで追加 📄';
+    recBtn.onclick=addStepOnly;
+  } else {
+    recBtn.textContent='追加してすぐ録画 🎥';
+    recBtn.onclick=addStepRec;
+  }
 }
 
 /* ── SHEETS / DRAWER ── */
