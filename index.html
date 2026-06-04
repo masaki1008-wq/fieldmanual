@@ -918,9 +918,9 @@ body{
       </div>
       <div class="pv-form">
         <div class="pv-title" id="pv-step">工程名</div>
-        <div class="pv-sub">文字起こしを確認・修正してから保存してください</div>
-        <div class="pv-tx-lbl">📝 文字起こし（タップして編集）<span class="ai-badge">AI完了</span></div>
-        <div class="pv-tx" contenteditable="true" id="pv-tx">まず最初に安全帽とグローブを着用してください。次に、機械の電源スイッチが完全にOFFになっているか確認します。確認後、安全ロックをかけてから作業を開始してください。</div>
+        <div class="pv-sub">補足説明や注意事項があれば入力してください（任意）</div>
+        <div class="pv-tx-lbl">📝 テキストメモ（任意）</div>
+        <div class="pv-tx" contenteditable="true" id="pv-tx" placeholder="補足説明・注意事項など"></div>
         <div class="upload-progress" id="upload-prog">
           <div class="upload-progress-fill" id="upload-prog-fill"></div>
         </div>
@@ -2165,7 +2165,7 @@ function renderDetailInto(container,idx){
             </div>
           </div>
           ${step.transcript?`<div class="transcript-block">
-            <div class="transcript-lbl">📝 文字起こし</div>
+            <div class="transcript-lbl">📝 テキストメモ</div>
             <div class="transcript-text" contenteditable="true">${step.transcript}</div>
           </div>`:''}
         </div>`;
@@ -2549,15 +2549,14 @@ function onRecordingStop(){
   const ss=String(recSec%60).padStart(2,'0');
   document.getElementById('pv-dur').textContent='録画時間: '+mm+':'+ss;
   document.getElementById('pv-step').textContent=manuals[curM].steps[curS].name;
-  document.getElementById('pv-tx').textContent=
-    'まず最初に安全帽とグローブを着用してください。次に、機械の電源スイッチが完全にOFFになっているか確認します。確認後、安全ロックをかけてから作業を開始してください。';
+  document.getElementById('pv-tx').textContent='';
 
   // Stop live stream (camera off while previewing)
   stopStream();
 
   const wrap=document.getElementById('pv-wrap');
   wrap.style.flexDirection=isMobile()?'column':'row';
-  setTB('プレビュー・文字起こし','',()=>startRec(curS));
+  setTB('動画プレビュー','',()=>startRec(curS));
   showScreen('preview');
 }
 
