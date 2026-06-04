@@ -9,6 +9,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
 <style>
 :root {
   --bg:#f4f3ef; --bg2:#ffffff; --bg3:#eceae4; --bg4:#e2e0d8;
@@ -802,8 +803,9 @@ const firebaseConfig = {
   appId: "1:755340272786:web:8c76ced9d2d2568f01b24b"
 };
 firebase.initializeApp(firebaseConfig);
-const auth = firebase.auth();
-const db   = firebase.firestore();
+const auth    = firebase.auth();
+const db      = firebase.firestore();
+const storage = firebase.storage();
 
 /* ── AUTH ── */
 let currentUser = null;
@@ -1314,8 +1316,24 @@ async function saveStep(){
   const m=manuals[curM]; const step=m.steps[curS];
   const dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
   const transcript=document.getElementById('pv-tx').textContent.trim();
-  const pvVid=document.getElementById('pv-video');
-  const videoUrl=pvVid.src||null;
+
+  let videoUrl = step.videoUrl || null;
+
+  // 新しく録画したBlobをCloud Storageにアップロード
+  if(recordedBlob){
+    showToast('動画をアップロード中...');
+    try {
+      const ext = recordedBlob.type.includes('mp4') ? 'mp4' : 'webm';
+      const path = `videos/${curMId}/${step.id}/recording.${ext}`;
+      const ref = storage.ref(path);
+      const snap = await ref.put(recordedBlob, { contentType: recordedBlob.type });
+      videoUrl = await snap.ref.getDownloadURL();
+      recordedBlob = null; // アップロード済みのため解放
+    } catch(e) {
+      showToast('動画アップロードエラー: ' + e.message);
+      return;
+    }
+  }
 
   // Firestoreに保存
   await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
