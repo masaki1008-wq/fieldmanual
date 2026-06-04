@@ -971,20 +971,23 @@ let unsubDepts = null;
 function listenDepartments(){
   if(unsubDepts) unsubDepts();
   unsubDepts = db.collection('departments').orderBy('order','asc')
-    .onSnapshot(async snap => {
-      const depts = [];
-      for(const doc of snap.docs){
-        const dept = { id: doc.id, ...doc.data(), teams: [] };
-        const teamsSnap = await db.collection('departments').doc(doc.id)
-          .collection('teams').orderBy('order','asc').get();
-        dept.teams = teamsSnap.docs.map(t => ({ id: t.id, ...t.data() }));
-        depts.push(dept);
-      }
-      departments = depts;
-      renderHome();
-      renderDeptSelects();
-      renderDeptMgr();
-    });
+    .onSnapshot(() => refreshDepartments());
+}
+
+async function refreshDepartments(){
+  const snap = await db.collection('departments').orderBy('order','asc').get();
+  const depts = [];
+  for(const doc of snap.docs){
+    const dept = { id: doc.id, ...doc.data(), teams: [] };
+    const teamsSnap = await db.collection('departments').doc(doc.id)
+      .collection('teams').orderBy('order','asc').get();
+    dept.teams = teamsSnap.docs.map(t => ({ id: t.id, ...t.data() }));
+    depts.push(dept);
+  }
+  departments = depts;
+  renderHome();
+  renderDeptSelects();
+  renderDeptMgr();
 }
 
 function listenManuals(){
@@ -1127,6 +1130,7 @@ function promptAddTeam(deptId){
       name, order,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    await refreshDepartments();
     showToast('チームを追加しました');
   });
 }
@@ -1135,6 +1139,7 @@ function promptRenameTeam(deptId, teamId, currentName){
   showNameInput('チーム名を変更', currentName, async name => {
     if(!name) return;
     await db.collection('departments').doc(deptId).collection('teams').doc(teamId).update({ name });
+    await refreshDepartments();
     showToast('チーム名を変更しました');
   });
 }
@@ -1142,6 +1147,7 @@ function promptRenameTeam(deptId, teamId, currentName){
 async function deleteTeam(deptId, teamId){
   if(!confirm('このチームを削除しますか？')) return;
   await db.collection('departments').doc(deptId).collection('teams').doc(teamId).delete();
+  await refreshDepartments();
   showToast('チームを削除しました');
 }
 
@@ -1156,6 +1162,7 @@ async function moveTeam(deptId, teamId, dir){
   batch.update(ref.doc(teamId), { order: ni });
   batch.update(ref.doc(dept.teams[ni].id), { order: idx });
   await batch.commit();
+  await refreshDepartments();
 }
 
 /* ── 汎用名前入力 ── */
