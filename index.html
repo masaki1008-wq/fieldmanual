@@ -645,7 +645,7 @@ body{
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
       新規マニュアル
     </button>
-    <div class="nav-label" style="margin-top:8px">マニュアル</div>
+    <div class="nav-label" style="margin-top:8px">部門 / チーム / マニュアル</div>
     <div id="sb-manuals"></div>
   </nav>
   <div class="sidebar-user">
@@ -844,7 +844,7 @@ body{
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
         新規マニュアル
       </button>
-      <div class="nav-label" style="margin-top:8px">マニュアル</div>
+      <div class="nav-label" style="margin-top:8px">部門 / チーム / マニュアル</div>
       <div id="drawer-manuals"></div>
     </nav>
     <div class="sidebar-user">
@@ -1684,18 +1684,107 @@ function openNewManualForTeam(){
   showSheet('sheet-new');
 }
 
+// サイドバーのドリルダウン状態
+let sbState='dept'; // 'dept' | 'team' | 'manual'
+let sbDept=null, sbTeam=null;
+
 function refreshNavLinks(){
   ['sb-manuals','drawer-manuals'].forEach(id=>{
     const el=document.getElementById(id);if(!el)return;
-    el.innerHTML=manuals.map((m,i)=>{
+    renderSidebarNav(el);
+  });
+}
+
+function renderSidebarNav(el){
+  el.innerHTML='';
+
+  if(sbState==='dept'){
+    // 部門一覧
+    if(departments.length===0){
+      el.innerHTML='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">部門がありません</div>';
+      return;
+    }
+    departments.forEach(dept=>{
+      const btn=document.createElement('button');
+      btn.className='nav-btn';
+      btn.innerHTML=`
+        <span style="font-size:14px">🏢</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${dept.name}</span>
+        <span style="font-size:16px;opacity:.5">›</span>
+      `;
+      btn.onclick=()=>{ sbDept=dept; sbState='team'; refreshNavLinks(); };
+      el.appendChild(btn);
+    });
+
+  } else if(sbState==='team'){
+    // 戻るボタン
+    const back=document.createElement('button');
+    back.className='nav-btn';
+    back.style.cssText='opacity:.7;font-size:11px';
+    back.innerHTML=`<span>←</span><span style="flex:1;font-size:11px">部門一覧へ戻る</span>`;
+    back.onclick=()=>{ sbState='dept'; sbDept=null; refreshNavLinks(); };
+    el.appendChild(back);
+
+    // 部門ラベル
+    const lbl=document.createElement('div');
+    lbl.className='nav-label';
+    lbl.textContent=sbDept?.name||'';
+    el.appendChild(lbl);
+
+    // チーム一覧
+    const teams=sbDept?.teams||[];
+    if(teams.length===0){
+      el.innerHTML+='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">チームがありません</div>';
+      return;
+    }
+    teams.forEach(team=>{
+      const cnt=manuals.filter(m=>m.deptId===sbDept.id&&m.teamId===team.id).length;
+      const btn=document.createElement('button');
+      btn.className='nav-btn';
+      btn.innerHTML=`
+        <span style="font-size:14px">👥</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${team.name}</span>
+        <span class="nav-count">${cnt}</span>
+      `;
+      btn.onclick=()=>{ sbTeam=team; sbState='manual'; refreshNavLinks(); };
+      el.appendChild(btn);
+    });
+
+  } else if(sbState==='manual'){
+    // 戻るボタン
+    const back=document.createElement('button');
+    back.className='nav-btn';
+    back.style.cssText='opacity:.7';
+    back.innerHTML=`<span>←</span><span style="flex:1;font-size:11px">${sbDept?.name||''}へ戻る</span>`;
+    back.onclick=()=>{ sbState='team'; sbTeam=null; refreshNavLinks(); };
+    el.appendChild(back);
+
+    // チームラベル
+    const lbl=document.createElement('div');
+    lbl.className='nav-label';
+    lbl.textContent=sbTeam?.name||'';
+    el.appendChild(lbl);
+
+    // マニュアル一覧
+    const items=manuals.filter((m,i)=>m.deptId===sbDept?.id&&m.teamId===sbTeam?.id)
+      .map(m=>({m, i:manuals.indexOf(m)}));
+    if(items.length===0){
+      el.innerHTML+='<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">マニュアルがありません</div>';
+      return;
+    }
+    items.forEach(({m,i})=>{
       const done=m.steps.filter(s=>s.status==='done').length;
-      return `<button class="nav-btn" onclick="openManual(${i});closeDrawer()">
-        <span style="font-size:15px">${m.icon}</span>
+      const btn=document.createElement('button');
+      btn.className='nav-btn';
+      btn.innerHTML=`
+        <span style="font-size:14px">${m.icon}</span>
         <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${m.name}</span>
         <span class="nav-count">${done}/${m.steps.length}</span>
-      </button>`;
-    }).join('');
-  });
+      `;
+      btn.onclick=()=>{ openManual(i); closeDrawer(); };
+      el.appendChild(btn);
+    });
+  }
 }
 
 /* ── MANUAL DETAIL ── */
