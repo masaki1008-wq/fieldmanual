@@ -8,6 +8,14 @@ service cloud.firestore {
       allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
+    // 部門・チーム：ログイン済みユーザーは全員読み書き可
+    match /departments/{deptId} {
+      allow read, write: if request.auth != null;
+      match /teams/{teamId} {
+        allow read, write: if request.auth != null;
+      }
+    }
+
     // マニュアル：ログイン済みユーザーは全員読み取り可、書き込みは本人のみ
     match /manuals/{manualId} {
       allow read: if request.auth != null;
