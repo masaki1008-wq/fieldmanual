@@ -903,6 +903,28 @@ body{
   </div>
 </div>
 
+<!-- SHEET: 工程編集 -->
+<div class="sheet-ov" id="sheet-edit-step" onclick="if(event.target===this)hideSheet('sheet-edit-step')">
+  <div class="sheet-box">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">工程を編集</div>
+    <div class="inp-g"><label class="inp-lbl">工程名 *</label><input class="inp-f" id="edit-sname" type="text" autocomplete="off"></div>
+    <div class="inp-g"><label class="inp-lbl">説明（任意）</label><input class="inp-f" id="edit-sdesc" type="text" autocomplete="off"></div>
+    <div class="inp-g">
+      <label class="inp-lbl">コンテンツタイプ</label>
+      <div class="ctype-row">
+        <button class="ctype-btn edit-ctype-btn sel" onclick="selEditCtype(this,'video')">🎥 動画</button>
+        <button class="ctype-btn edit-ctype-btn" onclick="selEditCtype(this,'text')">📄 テキスト</button>
+        <button class="ctype-btn edit-ctype-btn" onclick="selEditCtype(this,'both')">🎥+📄 両方</button>
+      </div>
+    </div>
+    <div class="sheet-btns">
+      <button class="btn-s bsa" onclick="saveStepEdit()">変更を保存</button>
+      <button class="btn-s bsg" onclick="hideSheet('sheet-edit-step')">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <!-- SHEET: 名前入力（汎用） -->
 <div class="sheet-ov" id="sheet-name-input" onclick="if(event.target===this)hideSheet('sheet-name-input')">
   <div class="sheet-box">
@@ -1182,6 +1204,56 @@ async function moveTeam(deptId, teamId, dir){
   batch.update(ref.doc(dept.teams[ni].id), { order: idx });
   await batch.commit();
   await refreshDepartments();
+}
+
+/* ── 工程編集 ── */
+let editCtype='video';
+
+function selEditCtype(el,val){
+  document.querySelectorAll('.edit-ctype-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+  editCtype=val;
+}
+
+function openStepEdit(idx){
+  const step=manuals[curM].steps[idx];
+  document.getElementById('edit-sname').value=step.name||'';
+  document.getElementById('edit-sdesc').value=step.desc||'';
+  editCtype=step.contentType||'video';
+  // コンテンツタイプボタンの選択状態を更新
+  document.querySelectorAll('.edit-ctype-btn').forEach(b=>{
+    b.classList.toggle('sel', b.textContent.includes(
+      editCtype==='video'?'動画':editCtype==='text'?'テキスト':'両方'
+    ));
+  });
+  // 現在のインデックスをシートに保存
+  document.getElementById('sheet-edit-step').dataset.idx=idx;
+  showSheet('sheet-edit-step');
+}
+
+async function saveStepEdit(){
+  const idx=parseInt(document.getElementById('sheet-edit-step').dataset.idx);
+  const name=document.getElementById('edit-sname').value.trim();
+  const desc=document.getElementById('edit-sdesc').value.trim();
+  if(!name){showToast('工程名を入力してください');return;}
+  const step=manuals[curM].steps[idx];
+  try{
+    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+      name, desc, contentType:editCtype,
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    // ローカル状態を即時更新
+    manuals[curM].steps[idx].name=name;
+    manuals[curM].steps[idx].desc=desc;
+    manuals[curM].steps[idx].contentType=editCtype;
+    hideSheet('sheet-edit-step');
+    renderStepsList();
+    const container=isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+    renderDetailInto(container,idx);
+    showToast('工程を更新しました ✓');
+  }catch(e){
+    showToast('エラー: '+e.message);
+  }
 }
 
 /* ── 汎用名前入力 ── */
@@ -1510,13 +1582,14 @@ function renderDetailInto(container,idx){
   container.innerHTML=`
     <div class="sd-hdr">
       <div class="sd-num">${idx+1}</div>
-      <div>
+      <div style="flex:1;min-width:0">
         <div class="sd-title">${step.name}</div>
         ${step.desc?`<div class="sd-desc">${step.desc}</div>`:''}
-        <div style="margin-top:4px">
+        <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)">
             ${ctype==='video'?'🎥 動画':ctype==='text'?'📄 テキスト':'🎥+📄 両方'}
           </span>
+          <button class="btn btn-ghost btn-sm" onclick="openStepEdit(${idx})" style="font-size:11px;padding:2px 8px">✏️ 編集</button>
         </div>
       </div>
     </div>
