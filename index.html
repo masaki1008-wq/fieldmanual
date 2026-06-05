@@ -2716,12 +2716,14 @@ let facingMode='environment';
 let torchOn=false;
 
 // バックグラウンドアップロード管理
-let bgUploadTask=null;   // Firebase uploadTask
-let bgUploadUrl=null;    // アップロード完了後のURL
-let bgUploadDone=false;  // 完了フラグ
+let bgUploadTask=null;
+let bgUploadPromise=null; // ★ URL取得まで含むPromise（Race Condition対策）
+let bgUploadUrl=null;
+let bgUploadDone=false;
 
 function resetBgUpload(){
-  bgUploadTask=null; bgUploadUrl=null; bgUploadDone=false;
+  bgUploadTask=null; bgUploadPromise=null;
+  bgUploadUrl=null; bgUploadDone=false;
 }
 
 function startBgUpload(blob){
@@ -2733,33 +2735,37 @@ function startBgUpload(blob){
   const path=`videos/${curMId}/${step.id}/recording.${ext}`;
   bgUploadTask=storage.ref(path).put(blob,{contentType:baseMime});
 
-  // プレビュー画面の進捗バーに反映
   const prog=document.getElementById('upload-prog');
   const fill=document.getElementById('upload-prog-fill');
   const pctEl=document.getElementById('upload-pct');
   if(prog) prog.style.display='block';
-  if(pctEl){ pctEl.style.display='block'; pctEl.textContent='バックグラウンドでアップロード中...'; }
+  if(pctEl){ pctEl.style.display='block'; pctEl.textContent='アップロード中...'; }
 
-  bgUploadTask.on('state_changed',
-    snap=>{
-      const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
-      if(fill) fill.style.width=pct+'%';
-      if(pctEl) pctEl.textContent=`アップロード中... ${pct}%`;
-    },
-    err=>{ console.warn('BG upload error',err); resetBgUpload(); },
-    async ()=>{
-      bgUploadUrl=await bgUploadTask.snapshot.ref.getDownloadURL();
-      bgUploadDone=true;
-      recordedBlob=null; // メモリ解放
-      if(fill) fill.style.width='100%';
-      if(pctEl) pctEl.textContent='✓ アップロード完了';
-      // 2秒後に非表示
-      setTimeout(()=>{
-        if(prog) prog.style.display='none';
-        if(pctEl) pctEl.style.display='none';
-      }, 2000);
-    }
-  );
+  // ★ getDownloadURL完了まで含む単一Promise
+  // → saveStep側はこれをawaitするだけでよい（完了前後どちらでも安全）
+  bgUploadPromise=new Promise((resolve, reject)=>{
+    bgUploadTask.on('state_changed',
+      snap=>{
+        const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
+        if(fill) fill.style.width=pct+'%';
+        if(pctEl) pctEl.textContent=`アップロード中... ${pct}%`;
+      },
+      err=>reject(err),
+      async ()=>{
+        try{
+          const url=await bgUploadTask.snapshot.ref.getDownloadURL();
+          bgUploadUrl=url; bgUploadDone=true; recordedBlob=null;
+          if(fill) fill.style.width='100%';
+          if(pctEl) pctEl.textContent='✓ アップロード完了';
+          setTimeout(()=>{
+            if(prog) prog.style.display='none';
+            if(pctEl) pctEl.style.display='none';
+          }, 2000);
+          resolve(url); // ← URLを返す
+        }catch(e){ reject(e); }
+      }
+    );
+  });
 }
 
 async function startRec(stepIdx){
@@ -2961,7 +2967,7 @@ function retake(){
   if(bgUploadTask && !bgUploadDone){
     try{ bgUploadTask.cancel(); }catch(e){}
   }
-  resetBgUpload();
+  resetBgUpload(); // bgUploadPromiseも同時にリセット
   const pvVid=document.getElementById('pv-video');
   if(pvVid.src){URL.revokeObjectURL(pvVid.src);pvVid.src='';pvVid.style.display='none';}
   document.getElementById('pv-fallback').style.display='flex';
@@ -2985,38 +2991,25 @@ async function saveStep(){
   const progFill=document.getElementById('upload-prog-fill');
   const progPct=document.getElementById('upload-pct');
 
-  if(bgUploadDone && bgUploadUrl){
-    // ★ バックグラウンドアップロード完了済み → 即保存
-    videoUrl=bgUploadUrl;
-    resetBgUpload();
-  } else if(bgUploadTask && !bgUploadDone){
-    // ★ まだアップロード中 → 完了まで待機
-    saveBtn.disabled=true; saveBtn.textContent='アップロード完了待ち...';
-    if(prog) prog.style.display='block';
-    if(progPct) progPct.style.display='block';
-    try{
-      await new Promise((resolve,reject)=>{
-        bgUploadTask.on('state_changed',
-          snap=>{
-            const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
-            if(progFill) progFill.style.width=pct+'%';
-            if(progPct) progPct.textContent=`アップロード中... ${pct}%`;
-          },
-          err=>reject(err),
-          ()=>resolve()
-        );
-      });
-      videoUrl=await bgUploadTask.snapshot.ref.getDownloadURL();
-      resetBgUpload();
-    }catch(e){
-      saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
-      if(prog) prog.style.display='none';
-      if(progPct) progPct.style.display='none';
-      alert('動画アップロードエラー:\n'+e.message);
-      return;
+  if(bgUploadPromise){
+    // ★ bgUploadPromiseをawaitするだけ（完了前後どちらでも安全）
+    if(bgUploadDone && bgUploadUrl){
+      // 既に完了済み → 即座に使用
+      videoUrl=bgUploadUrl;
+    } else {
+      // まだ完了していない → 完了まで待機
+      saveBtn.disabled=true; saveBtn.textContent='アップロード完了待ち...';
+      try{
+        videoUrl=await bgUploadPromise; // URLが返ってくる
+      }catch(e){
+        saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
+        if(prog) prog.style.display='none';
+        if(progPct) progPct.style.display='none';
+        alert('動画アップロードエラー:\n'+e.message);
+        return;
+      }
     }
-    if(prog) prog.style.display='none';
-    if(progPct) progPct.style.display='none';
+    resetBgUpload();
   } else if(recordedBlob){
     // フォールバック: BG uploadが開始されなかった場合
     saveBtn.disabled=true; saveBtn.textContent='アップロード中...';
