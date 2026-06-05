@@ -335,13 +335,6 @@ body{
 .rec-timer.show{opacity:1}
 .rec-ph{font-size:62px;opacity:.1;pointer-events:none}
 .rec-hint{font-size:13px;color:rgba(255,255,255,.4);pointer-events:none}
-.rec-tx{
-  position:absolute;bottom:0;left:0;right:0;padding:22px 15px 14px;
-  background:linear-gradient(transparent,rgba(0,0,0,.86));
-  font-size:13px;color:rgba(255,255,255,.88);line-height:1.7;
-  opacity:0;transition:opacity .3s;pointer-events:none;
-}
-.rec-tx.show{opacity:1}
 .rec-controls{
   background:#0a0a0a;flex-shrink:0;
   padding:18px 0 calc(24px + var(--safe-b));
@@ -972,7 +965,6 @@ body{
           <div style="font-size:40px;margin-bottom:12px">⚠️</div>
           <div id="rec-err-msg" style="font-size:14px;line-height:1.6"></div>
         </div>
-        <div class="rec-tx" id="rec-tx" style="z-index:3"></div>
       </div>
       <div class="rec-controls">
         <div>
@@ -2067,14 +2059,9 @@ function showNameInput(title, defaultVal, callback){
 }
 
 let curM=0, curMId=null, curS=null, curSId=null;
-let isRec=false,recSec=0,recInt=null,txPh=0;
+let isRec=false,recSec=0,recInt=null;
 let selIco='🏭';
 const isMobile=()=>window.innerWidth<768;
-const TX=[
-  'まず最初に安全帽とグローブを着用してください...',
-  '次に機械の電源スイッチがOFFになっているか確認します...',
-  '確認後、安全ロックをかけてから作業を開始してください。'
-];
 
 /* ── SCREEN ── */
 function showScreen(id){
@@ -2769,7 +2756,7 @@ function startBgUpload(blob){
 }
 
 async function startRec(stepIdx){
-  curS=stepIdx; isRec=false; recSec=0; txPh=0;
+  curS=stepIdx; isRec=false; recSec=0;
   recChunks=[]; recordedBlob=null;
 
   const m=manuals[curM]; const step=m.steps[stepIdx];
@@ -2779,8 +2766,6 @@ async function startRec(stepIdx){
   document.getElementById('rec-badge').classList.remove('show');
   document.getElementById('rec-timer').classList.remove('show');
   document.getElementById('rec-timer').textContent='00:00';
-  document.getElementById('rec-tx').classList.remove('show');
-  document.getElementById('rec-tx').textContent='';
   document.getElementById('rec-ph').style.display='flex';
   document.getElementById('rec-hint').textContent='カメラを起動しています...';
   document.getElementById('rec-err').style.display='none';
@@ -2886,10 +2871,6 @@ function toggleRec(){
       const mm=String(Math.floor(recSec/60)).padStart(2,'0');
       const ss=String(recSec%60).padStart(2,'0');
       document.getElementById('rec-timer').textContent=mm+':'+ss;
-      const txEl=document.getElementById('rec-tx');
-      if(recSec===5&&txPh===0){txEl.textContent=TX[0];txEl.classList.add('show');txPh=1;}
-      if(recSec===12&&txPh===1){txEl.textContent=TX[0]+' '+TX[1];txPh=2;}
-      if(recSec===18&&txPh===2){txEl.textContent=TX.join(' ');txPh=3;}
     },1000);
   } else {
     // STOP recording
