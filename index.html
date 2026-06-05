@@ -726,10 +726,15 @@ body{
             style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
             font-size:14px;font-family:var(--font);margin-bottom:10px;outline:none;box-sizing:border-box">
         </div>
-        <input id="login-pass" type="password" placeholder="パスワード"
-          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
-          font-size:14px;font-family:var(--font);margin-bottom:14px;outline:none;box-sizing:border-box"
-          onkeydown="if(event.key==='Enter')loginWithEmail()">
+        <div style="position:relative;margin-bottom:14px">
+          <input id="login-pass" type="password" placeholder="パスワード"
+            style="width:100%;padding:13px;padding-right:48px;border-radius:12px;border:1.5px solid #ddd;
+            font-size:14px;font-family:var(--font);outline:none;box-sizing:border-box"
+            onkeydown="if(event.key==='Enter')loginWithEmail()">
+          <button type="button" onclick="togglePassVis('login-pass',this)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+            border:none;background:none;cursor:pointer;font-size:18px;color:#bbb;padding:4px;line-height:1">👁</button>
+        </div>
         <button onclick="loginWithEmail()" style="
           width:100%;padding:14px;border-radius:12px;border:none;
           background:#18180f;color:#fff;font-size:14px;font-family:var(--font);font-weight:700;
@@ -769,9 +774,14 @@ body{
         <input id="reg-email" type="email" placeholder="メールアドレス（@westa.co.jp）"
           style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
           font-size:14px;font-family:var(--font);margin-bottom:10px;outline:none;box-sizing:border-box">
-        <input id="reg-pass" type="password" placeholder="パスワード（6文字以上）"
-          style="width:100%;padding:13px;border-radius:12px;border:1.5px solid #ddd;
-          font-size:14px;font-family:var(--font);margin-bottom:14px;outline:none;box-sizing:border-box">
+        <div style="position:relative;margin-bottom:14px">
+          <input id="reg-pass" type="password" placeholder="パスワード（6文字以上）"
+            style="width:100%;padding:13px;padding-right:48px;border-radius:12px;border:1.5px solid #ddd;
+            font-size:14px;font-family:var(--font);outline:none;box-sizing:border-box">
+          <button type="button" onclick="togglePassVis('reg-pass',this)"
+            style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+            border:none;background:none;cursor:pointer;font-size:18px;color:#bbb;padding:4px;line-height:1">👁</button>
+        </div>
         <button onclick="registerWithEmail()" style="
           width:100%;padding:14px;border-radius:12px;border:none;
           background:#18180f;color:#fff;font-size:14px;font-family:var(--font);font-weight:700;
@@ -815,8 +825,9 @@ body{
     <div id="sb-manuals"></div>
   </nav>
   <div class="sidebar-user">
-    <div class="user-av">田</div>
-    <div><div class="user-name">田中 花子</div><div class="user-role">コンテンツ作成者</div></div>
+    <img src="./mascot.png" style="width:38px;height:38px;border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid rgba(255,255,255,.2)" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+    <div class="user-av" style="display:none">P</div>
+    <div><div class="user-name">動画マニュアルPJ</div><div class="user-role">西田精麦株式会社</div></div>
   </div>
 </aside>
 
@@ -1241,6 +1252,20 @@ function setLoginMsg(msg, isError=false){
   const el=document.getElementById('login-msg');
   el.textContent=msg;
   el.style.color=isError?'#e84d00':'#aaa';
+}
+
+/* ── パスワード表示切替 ── */
+function togglePassVis(inputId, btn){
+  const input=document.getElementById(inputId);
+  if(input.type==='password'){
+    input.type='text';
+    btn.textContent='🙈';
+    btn.style.color='#555';
+  } else {
+    input.type='password';
+    btn.textContent='👁';
+    btn.style.color='#bbb';
+  }
 }
 
 const SAVED_EMAIL_KEY='fm_saved_email';
