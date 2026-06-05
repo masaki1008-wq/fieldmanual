@@ -1529,7 +1529,8 @@ auth.onAuthStateChanged(async user => {
     }, { merge: true });
     // ログインユーザー名をヘッダーに表示（サイドバー下部は固定ブランディング）
     const loginName = user.displayName || user.email.split('@')[0];
-    document.getElementById('login-user-name').textContent = loginName;
+    const loginEl = document.getElementById('login-user-name');
+    if(loginEl) loginEl.textContent = loginName;
     // 部門・マニュアルをFirestoreからリアルタイム取得
     listenDepartments();
     listenManuals();
@@ -1760,7 +1761,7 @@ let vwrIdx = 0;
 
 function openViewer(){
   const m=manuals[curM];
-  if(!m.steps.length){showToast('工程がまだありません');return;}
+  if(!m||!m.steps?.length){showToast('工程がまだありません');return;}
   viewerDone = new Set();
   vwrIdx = 0;
   setTB('作業者閲覧モード', '', ()=>openManual(curM));
@@ -3032,6 +3033,8 @@ async function saveStep(){
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
   }catch(e){
+    // ボタンを元に戻してから通知
+    if(saveBtn){ saveBtn.textContent='この工程を保存 ✓'; saveBtn.disabled=false; }
     alert('保存エラー:\n'+e.message);
     return;
   }
