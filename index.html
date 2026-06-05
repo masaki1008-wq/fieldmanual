@@ -2910,6 +2910,14 @@ function onRecordingStop(){
   // ★ 録画終了と同時にバックグラウンドでアップロード開始
   startBgUpload(recordedBlob);
 
+  // ★ 保存ボタンを毎回リセット（前の工程でdisabledのまま残るバグ対策）
+  const saveBtn=document.getElementById('save-step-btn');
+  if(saveBtn){ saveBtn.textContent='この工程を保存 ✓'; saveBtn.disabled=false; }
+  const prog=document.getElementById('upload-prog');
+  const pctEl=document.getElementById('upload-pct');
+  if(prog) prog.style.display='block'; // BG uploadの進捗を表示
+  if(pctEl) pctEl.style.display='block';
+
   // プレビュー再生用のURL生成
   const url=URL.createObjectURL(recordedBlob);
   const pvVid=document.getElementById('pv-video');
@@ -3058,12 +3066,16 @@ async function saveStep(){
   manuals[curM].steps[curS].transcript=transcript;
   manuals[curM].steps[curS].videoUrl=videoUrl;
 
+  // ★ 保存成功後は必ずボタンをリセット（次の工程のために）
+  if(saveBtn){ saveBtn.textContent='この工程を保存 ✓'; saveBtn.disabled=false; }
+
   showToast('「'+step.name+'」を保存しました ✓');
   const m2=manuals[curM];
   setTB(m2.name,
-    `<button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
-     <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
-    goHome);
+    `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👷 作業者閲覧</button>
+     <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+     <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
+    ()=>{ if(unsubSteps){unsubSteps();unsubSteps=null;} goHome(); });
   renderStepsList();
   if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),curS);
   showScreen('steps');
