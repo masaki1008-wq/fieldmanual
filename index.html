@@ -1336,6 +1336,13 @@ body{
 <div class="toast" id="toast"></div>
 
 <script>
+/* ── Service Worker 登録（動画キャッシュ） ── */
+if('serviceWorker' in navigator){
+  navigator.serviceWorker.register('/sw.js')
+    .then(()=>console.log('SW登録完了'))
+    .catch(e=>console.warn('SW登録失敗',e));
+}
+
 /* ── FIREBASE 初期化 ── */
 const firebaseConfig = {
   apiKey: "AIzaSyDKfhwmxTMgQtIfELxhqsgCgse-DPPVOf4",
@@ -1777,6 +1784,8 @@ function openViewer(){
   setTB('作業者閲覧モード', '', ()=>openManual(curM));
   showScreen('viewer');
   vwrRender();
+  // 最初の工程の次を先読み開始
+  vwrPreloadNext(m.steps, 0);
 }
 
 function vwrRender(){
@@ -1881,6 +1890,23 @@ function vwrGo(dir){
   if(ni<0||ni>=steps.length) return;
   vwrIdx=ni;
   vwrRender();
+  // 次の工程の動画を先読み
+  vwrPreloadNext(steps, ni);
+}
+
+function vwrPreloadNext(steps, idx){
+  // 既存の先読み要素を削除
+  document.getElementById('_preload_vid')?.remove();
+  const next=steps[idx+1];
+  if(!next?.videoUrl) return;
+  const el=document.createElement('video');
+  el.id='_preload_vid';
+  el.preload='auto';
+  el.src=next.videoUrl;
+  el.style.cssText='display:none;position:absolute;width:0;height:0';
+  document.body.appendChild(el);
+  // 読み込み開始後10秒でキャッシュに乗ったら解放
+  setTimeout(()=>el.remove(), 10000);
 }
 
 function vwrToggleDone(){
@@ -2782,8 +2808,8 @@ async function startRec(stepIdx){
     const constraints={
       video:{
         facingMode: facingMode,
-        width:{ideal:1280, max:1280}, height:{ideal:720, max:720},
-        frameRate:{ideal:24, max:30}  // 24fps: 20%削減・現場用途で十分
+        width:{ideal:854, max:1280}, height:{ideal:480, max:720},
+        frameRate:{ideal:24, max:30}  // 480p: ファイルサイズ50%削減・現場用途で十分
       },
       audio:true
     };
@@ -2852,8 +2878,8 @@ function toggleRec(){
     // 標準画質: 映像2Mbps + 音声96kbps ≒ 1分あたり約15MB
     const opts = mime ? {
       mimeType: mime,
-      videoBitsPerSecond: 1000000,  // 1 Mbps（現場用途で十分・1分≒7.5MB）
-      audioBitsPerSecond: 64000     // 64 kbps
+      videoBitsPerSecond: 800000,   // 0.8 Mbps（480p・1分≒6MB）
+      audioBitsPerSecond: 48000     // 48 kbps
     } : {};
     try{
       mediaRecorder=new MediaRecorder(mediaStream,opts);
