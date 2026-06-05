@@ -800,11 +800,13 @@ body{
 <aside class="sidebar" id="desktop-sidebar">
   <!-- ロゴ＋イラスト -->
   <div class="sidebar-logo" style="padding:0;overflow:hidden;position:relative;min-height:80px">
-    <!-- イラスト（右側に自然に配置） -->
-    <img src="./アプリデザイン用.png"
-      style="position:absolute;right:-4px;bottom:-2px;height:110px;width:auto;
-      mix-blend-mode:screen;opacity:.9;pointer-events:none"
-      onerror="this.style.display='none'">
+    <!-- イラスト（右側・白縁をクリップして自然に配置） -->
+    <div style="position:absolute;right:0;bottom:0;height:114px;width:110px;overflow:hidden;pointer-events:none">
+      <img src="./アプリデザイン用.png"
+        style="position:absolute;right:-8px;bottom:-8px;height:130px;width:auto;
+        object-fit:cover;opacity:.95"
+        onerror="this.parentElement.style.display='none'">
+    </div>
     <!-- ロゴテキスト -->
     <div style="display:flex;align-items:center;gap:10px;padding:18px 16px;position:relative;z-index:1">
       <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 165" fill="none" style="width:28px;height:22px;flex-shrink:0">
