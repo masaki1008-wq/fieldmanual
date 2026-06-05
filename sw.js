@@ -3,7 +3,15 @@ const VIDEO_CACHE = 'fm-videos-v1';
 const APP_CACHE   = 'fm-app-v1';
 
 // キャッシュするアプリファイル
-const APP_FILES = ['/', '/index.html', '/アプリ用.png', '/アプリデザイン用.png'];
+const APP_FILES = [
+  '/', '/index.html',
+  '/アプリ用.png', '/アプリデザイン用.png',
+  'https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js',
+  'https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(

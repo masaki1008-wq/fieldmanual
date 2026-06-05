@@ -1001,7 +1001,10 @@ body{
       <div class="pv-form">
         <div class="pv-title" id="pv-step">工程名</div>
         <div class="pv-sub">補足説明や注意事項があれば入力してください（任意）</div>
-        <div class="pv-tx-lbl">📝 テキストメモ（任意）</div>
+        <div class="pv-tx-lbl" style="display:flex;align-items:center;justify-content:space-between">
+          📝 テキストメモ（任意）
+          <button type="button" class="btn btn-ghost btn-sm" style="font-size:11px" onclick="startVoiceInput('pv-tx',this)">🎤 音声入力</button>
+        </div>
         <div class="pv-tx" contenteditable="true" id="pv-tx" placeholder="補足説明・注意事項など"></div>
         <div class="upload-progress" id="upload-prog">
           <div class="upload-progress-fill" id="upload-prog-fill"></div>
@@ -1146,6 +1149,7 @@ body{
     <div class="inp-g" id="text-content-grp" style="display:none">
       <label class="inp-lbl">テキスト内容</label>
       <textarea class="text-manual-area" id="inp-text-content" placeholder="手順・注意事項をここに記述してください..." style="min-height:100px"></textarea>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px" onclick="startVoiceInput('inp-text-content',this)">🎤 音声入力</button>
       <div style="margin-top:8px">
         <input type="file" id="inp-temp-file" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.xlsx,.pptx,.xls,.ppt" multiple style="display:none" onchange="addTempFiles(this)">
         <button type="button" class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:6px" onclick="document.getElementById('inp-temp-file').click()">📎 ファイルを添付（PDF・Word・画像など）</button>
@@ -1333,15 +1337,41 @@ body{
   <div id="fv-content" style="flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px"></div>
 </div>
 
+<!-- オフラインバナー -->
+<div id="offline-banner" style="
+  display:none;position:fixed;top:0;left:0;right:0;z-index:9000;
+  background:#d97b00;color:#fff;text-align:center;
+  padding:8px;font-size:13px;font-weight:700;font-family:var(--font);
+">📶 オフライン中 — 既存のデータは閲覧できます。新規保存はWi-Fi接続後に同期されます</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
-/* ── Service Worker 登録（動画キャッシュ） ── */
+/* ── Service Worker 登録（動画・アプリキャッシュ） ── */
 if('serviceWorker' in navigator){
   navigator.serviceWorker.register('/sw.js')
     .then(()=>console.log('SW登録完了'))
     .catch(e=>console.warn('SW登録失敗',e));
 }
+
+/* ── オフライン検知 ── */
+function updateOnlineStatus(){
+  const banner=document.getElementById('offline-banner');
+  if(!banner) return;
+  if(!navigator.onLine){
+    banner.style.display='block';
+    // トップバーを少し下げる
+    const tb=document.getElementById('topbar');
+    if(tb) tb.style.marginTop='40px';
+  } else {
+    banner.style.display='none';
+    const tb=document.getElementById('topbar');
+    if(tb) tb.style.marginTop='';
+  }
+}
+window.addEventListener('online', ()=>{ updateOnlineStatus(); showToast('オンラインに復帰しました ✓'); });
+window.addEventListener('offline', updateOnlineStatus);
+updateOnlineStatus();
 
 /* ── FIREBASE 初期化 ── */
 const firebaseConfig = {
@@ -1356,6 +1386,12 @@ firebase.initializeApp(firebaseConfig);
 const auth    = firebase.auth();
 const db      = firebase.firestore();
 const storage = firebase.storage();
+
+// ★ Firestoreオフラインキャッシュ有効化（Wi-Fiなしでも既存データを閲覧・書き込み可）
+db.enablePersistence({synchronizeTabs:true}).catch(e=>{
+  if(e.code==='failed-precondition') console.warn('複数タブ: オフラインキャッシュは1タブのみ有効');
+  else if(e.code==='unimplemented') console.warn('このブラウザはオフラインキャッシュ非対応');
+});
 
 // 毎回ログインが必要（セッション非永続化）
 auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
@@ -2497,7 +2533,10 @@ function renderDetailInto(container,idx){
       <div class="text-manual-block">
         <div class="text-manual-lbl">📄 テキストマニュアル</div>
         <textarea class="text-manual-area" id="text-area-${idx}" placeholder="手順・注意事項をここに記述してください...">${step.textContent||''}</textarea>
-        <button class="btn btn-accent btn-sm" style="margin-top:8px;width:100%;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-ghost btn-sm" style="flex:none" onclick="startVoiceInput('text-area-${idx}',this)">🎤 音声入力</button>
+          <button class="btn btn-accent btn-sm" style="flex:1;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
+        </div>
         <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
           <div class="text-manual-lbl">📎 添付ファイル</div>
           <div id="attach-list-${idx}" style="margin-bottom:8px">${attHtml||'<div style="font-size:12px;color:var(--text3);padding:4px 0">添付ファイルなし</div>'}</div>
@@ -2546,6 +2585,79 @@ async function saveTextContent(idx){
   manuals[curM].steps[idx].status = text?'done':'todo';
   renderStepsList();
   showToast('テキストを保存しました ✓');
+}
+
+/* ── 音声入力（Web Speech API） ── */
+let currentRecognition = null;
+
+function startVoiceInput(targetId, btnEl){
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(!SR){
+    showToast('このブラウザは音声入力に対応していません（Chrome推奨）');
+    return;
+  }
+  // 録音中なら停止
+  if(currentRecognition){
+    currentRecognition.stop();
+    return;
+  }
+  const r = new SR();
+  r.lang = 'ja-JP';
+  r.continuous = true;
+  r.interimResults = true;
+  currentRecognition = r;
+
+  // ボタンをRECスタイルに
+  if(btnEl){
+    btnEl.innerHTML='<span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#fff;animation:blink .8s infinite"></span> 停止';
+    btnEl.style.background='var(--accent)';
+    btnEl.style.color='#fff';
+  }
+  showToast('🎤 音声入力中... 話しかけてください');
+
+  let interim = '';
+  r.onresult = e => {
+    let final='', interimTmp='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      if(e.results[i].isFinal) final+=e.results[i][0].transcript;
+      else interimTmp+=e.results[i][0].transcript;
+    }
+    const el=document.getElementById(targetId);
+    if(!el) return;
+    if(final){
+      // 確定テキストを追記
+      if(el.isContentEditable){
+        el.textContent=(el.textContent||'')+final;
+      } else {
+        el.value=(el.value||'')+final;
+      }
+    }
+  };
+  r.onerror = e => {
+    const msgs={'no-speech':'音声が検出されませんでした','audio-capture':'マイクが見つかりません','not-allowed':'マイクの許可が必要です'};
+    showToast('音声入力エラー: '+(msgs[e.error]||e.error));
+    resetVoiceBtn(btnEl);
+    currentRecognition=null;
+  };
+  r.onend = () => {
+    resetVoiceBtn(btnEl);
+    currentRecognition=null;
+    showToast('音声入力を終了しました');
+  };
+  r.start();
+}
+
+function resetVoiceBtn(btn){
+  if(!btn) return;
+  btn.innerHTML='🎤 音声入力';
+  btn.style.background='';
+  btn.style.color='';
+}
+
+function voiceBtnHtml(targetId){
+  return `<button type="button" class="btn btn-ghost btn-sm"
+    style="margin-top:6px;gap:5px"
+    onclick="startVoiceInput('${targetId}',this)">🎤 音声入力</button>`;
 }
 
 /* ── 動画縦横自動調整 ── */
