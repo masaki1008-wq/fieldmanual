@@ -2691,8 +2691,55 @@ async function deleteStep(idx){
 
 /* ── RECORDER (real camera) ── */
 let mediaStream=null, mediaRecorder=null, recChunks=[], recordedBlob=null;
-let facingMode='environment'; // rear camera by default on mobile
+let facingMode='environment';
 let torchOn=false;
+
+// バックグラウンドアップロード管理
+let bgUploadTask=null;   // Firebase uploadTask
+let bgUploadUrl=null;    // アップロード完了後のURL
+let bgUploadDone=false;  // 完了フラグ
+
+function resetBgUpload(){
+  bgUploadTask=null; bgUploadUrl=null; bgUploadDone=false;
+}
+
+function startBgUpload(blob){
+  resetBgUpload();
+  if(!curMId||!manuals[curM]?.steps[curS]) return;
+  const step=manuals[curM].steps[curS];
+  const baseMime=(blob.type||'video/webm').split(';')[0].trim();
+  const ext=baseMime.includes('mp4')?'mp4':'webm';
+  const path=`videos/${curMId}/${step.id}/recording.${ext}`;
+  bgUploadTask=storage.ref(path).put(blob,{contentType:baseMime});
+
+  // プレビュー画面の進捗バーに反映
+  const prog=document.getElementById('upload-prog');
+  const fill=document.getElementById('upload-prog-fill');
+  const pctEl=document.getElementById('upload-pct');
+  if(prog) prog.style.display='block';
+  if(pctEl){ pctEl.style.display='block'; pctEl.textContent='バックグラウンドでアップロード中...'; }
+
+  bgUploadTask.on('state_changed',
+    snap=>{
+      const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
+      if(fill) fill.style.width=pct+'%';
+      if(pctEl) pctEl.textContent=`アップロード中... ${pct}%`;
+    },
+    err=>{ console.warn('BG upload error',err); resetBgUpload(); },
+    async ()=>{
+      bgUploadUrl=await bgUploadTask.snapshot.ref.getDownloadURL();
+      bgUploadDone=true;
+      recordedBlob=null; // メモリ解放
+      if(fill) fill.style.width='100%';
+      if(pctEl) pctEl.textContent='✓ アップロード完了';
+      // 2秒後に非表示
+      setTimeout(()=>{
+        if(prog) prog.style.display='none';
+        if(pctEl) pctEl.style.display='none';
+      }, 2000);
+    }
+  );
+}
 
 async function startRec(stepIdx){
   curS=stepIdx; isRec=false; recSec=0; txPh=0;
@@ -2793,8 +2840,8 @@ function toggleRec(){
     // 標準画質: 映像2Mbps + 音声96kbps ≒ 1分あたり約15MB
     const opts = mime ? {
       mimeType: mime,
-      videoBitsPerSecond: 2000000,  // 2 Mbps（デフォルト8Mbps→75%削減）
-      audioBitsPerSecond: 96000     // 96 kbps
+      videoBitsPerSecond: 1500000,  // 1.5 Mbps（さらに25%削減・画質は十分）
+      audioBitsPerSecond: 64000     // 64 kbps（音声は軽量化）
     } : {};
     try{
       mediaRecorder=new MediaRecorder(mediaStream,opts);
@@ -2833,21 +2880,23 @@ function onRecordingStop(){
   recordedBlob=new Blob(recChunks,{type:mime});
   recChunks=[];
 
-  // Build object URL for preview playback
+  // ★ 録画終了と同時にバックグラウンドでアップロード開始
+  startBgUpload(recordedBlob);
+
+  // プレビュー再生用のURL生成
   const url=URL.createObjectURL(recordedBlob);
   const pvVid=document.getElementById('pv-video');
   pvVid.src=url;
   pvVid.style.display='block';
   document.getElementById('pv-fallback').style.display='none';
 
-  // Duration display
+  // 録画時間表示
   const mm=Math.floor(recSec/60);
   const ss=String(recSec%60).padStart(2,'0');
   document.getElementById('pv-dur').textContent='録画時間: '+mm+':'+ss;
   document.getElementById('pv-step').textContent=manuals[curM].steps[curS].name;
   document.getElementById('pv-tx').textContent='';
 
-  // Stop live stream (camera off while previewing)
   stopStream();
 
   const wrap=document.getElementById('pv-wrap');
@@ -2887,10 +2936,18 @@ function cancelRec(){
 }
 
 function retake(){
-  // Release preview blob URL
+  // バックグラウンドアップロードをキャンセル
+  if(bgUploadTask && !bgUploadDone){
+    try{ bgUploadTask.cancel(); }catch(e){}
+  }
+  resetBgUpload();
   const pvVid=document.getElementById('pv-video');
   if(pvVid.src){URL.revokeObjectURL(pvVid.src);pvVid.src='';pvVid.style.display='none';}
   document.getElementById('pv-fallback').style.display='flex';
+  const prog=document.getElementById('upload-prog');
+  const pctEl=document.getElementById('upload-pct');
+  if(prog) prog.style.display='none';
+  if(pctEl) pctEl.style.display='none';
   startRec(curS);
 }
 
@@ -2902,44 +2959,71 @@ async function saveStep(){
   const transcript=document.getElementById('pv-tx').textContent.trim();
 
   let videoUrl = step.videoUrl || null;
+  const saveBtn=document.getElementById('save-step-btn');
+  const prog=document.getElementById('upload-prog');
+  const progFill=document.getElementById('upload-prog-fill');
+  const progPct=document.getElementById('upload-pct');
 
-  // 録画したBlobをCloud Storageにアップロード
-  if(recordedBlob){
-    const saveBtn=document.getElementById('save-step-btn');
-    const prog=document.getElementById('upload-prog');
-    const progFill=document.getElementById('upload-prog-fill');
-    const progPct=document.getElementById('upload-pct');
-    saveBtn.disabled=true; saveBtn.textContent='アップロード中...';
-    prog.style.display='block'; progPct.style.display='block';
-    try {
-      const baseMime=(recordedBlob.type||'video/webm').split(';')[0].trim();
-      const ext=baseMime.includes('mp4')?'mp4':'webm';
-      const path=`videos/${curMId}/${step.id}/recording.${ext}`;
-      const ref=storage.ref(path);
-      const uploadTask=ref.put(recordedBlob,{contentType:baseMime});
-      // 進捗表示
+  if(bgUploadDone && bgUploadUrl){
+    // ★ バックグラウンドアップロード完了済み → 即保存
+    videoUrl=bgUploadUrl;
+    resetBgUpload();
+  } else if(bgUploadTask && !bgUploadDone){
+    // ★ まだアップロード中 → 完了まで待機
+    saveBtn.disabled=true; saveBtn.textContent='アップロード完了待ち...';
+    if(prog) prog.style.display='block';
+    if(progPct) progPct.style.display='block';
+    try{
       await new Promise((resolve,reject)=>{
-        uploadTask.on('state_changed',
+        bgUploadTask.on('state_changed',
           snap=>{
             const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
-            progFill.style.width=pct+'%';
-            progPct.textContent=`アップロード中... ${pct}%`;
+            if(progFill) progFill.style.width=pct+'%';
+            if(progPct) progPct.textContent=`アップロード中... ${pct}%`;
           },
           err=>reject(err),
           ()=>resolve()
         );
       });
-      videoUrl=await uploadTask.snapshot.ref.getDownloadURL();
-      recordedBlob=null;
-    } catch(e) {
+      videoUrl=await bgUploadTask.snapshot.ref.getDownloadURL();
+      resetBgUpload();
+    }catch(e){
       saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
-      prog.style.display='none'; progPct.style.display='none';
+      if(prog) prog.style.display='none';
+      if(progPct) progPct.style.display='none';
       alert('動画アップロードエラー:\n'+e.message);
       return;
     }
-    prog.style.display='none'; progPct.style.display='none';
-    saveBtn.textContent='保存中...';
+    if(prog) prog.style.display='none';
+    if(progPct) progPct.style.display='none';
+  } else if(recordedBlob){
+    // フォールバック: BG uploadが開始されなかった場合
+    saveBtn.disabled=true; saveBtn.textContent='アップロード中...';
+    if(prog) prog.style.display='block';
+    if(progPct) progPct.style.display='block';
+    try{
+      const baseMime=(recordedBlob.type||'video/webm').split(';')[0].trim();
+      const ext=baseMime.includes('mp4')?'mp4':'webm';
+      const uploadTask=storage.ref(`videos/${curMId}/${step.id}/recording.${ext}`)
+        .put(recordedBlob,{contentType:baseMime});
+      await new Promise((resolve,reject)=>{
+        uploadTask.on('state_changed',
+          snap=>{ if(progFill) progFill.style.width=Math.round(snap.bytesTransferred/snap.totalBytes*100)+'%'; },
+          err=>reject(err), ()=>resolve());
+      });
+      videoUrl=await uploadTask.snapshot.ref.getDownloadURL();
+      recordedBlob=null;
+    }catch(e){
+      saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
+      if(prog) prog.style.display='none';
+      if(progPct) progPct.style.display='none';
+      alert('動画アップロードエラー:\n'+e.message);
+      return;
+    }
+    if(prog) prog.style.display='none';
+    if(progPct) progPct.style.display='none';
   }
+  if(saveBtn) saveBtn.textContent='保存中...';
 
   // Firestoreに保存
   try{
