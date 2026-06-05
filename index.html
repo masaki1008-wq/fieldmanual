@@ -1575,25 +1575,36 @@ async function refreshDepartments(){
   renderDeptMgr();
 }
 
+// ★ 工程データは遅延読み込み（起動時は取得しない）
 function listenManuals(){
   if(unsubManuals) unsubManuals();
   unsubManuals = db.collection('manuals')
     .orderBy('createdAt', 'asc')
-    .onSnapshot(async snapshot => {
-      const manualsWithSteps = [];
-      for(const doc of snapshot.docs){
-        const data = { id: doc.id, ...doc.data(), steps: [] };
-        const stepsSnap = await db.collection('manuals').doc(doc.id)
-          .collection('steps').orderBy('order','asc').get();
-        data.steps = stepsSnap.docs.map(s => ({ id: s.id, ...s.data() }));
-        manualsWithSteps.push(data);
-      }
-      manuals = manualsWithSteps;
+    .onSnapshot(snapshot => {
+      // マニュアルのメタデータのみ取得（工程は取得しない）
+      manuals = snapshot.docs.map(doc => {
+        const existing = manuals.find(m => m.id === doc.id);
+        return { id: doc.id, ...doc.data(), steps: existing?.steps || [] };
+      });
       renderHome();
-      if(curMId) {
-        const idx = manuals.findIndex(m => m.id === curMId);
-        if(idx >= 0){ curM = idx; renderStepsList(); }
-      }
+      refreshNavLinks();
+    });
+}
+
+// 現在開いているマニュアルの工程をリアルタイム監視
+let unsubSteps = null;
+function listenCurrentSteps(){
+  if(unsubSteps){ unsubSteps(); unsubSteps=null; }
+  if(!curMId) return;
+  unsubSteps = db.collection('manuals').doc(curMId)
+    .collection('steps').orderBy('order','asc')
+    .onSnapshot(snap => {
+      const idx = manuals.findIndex(m => m.id === curMId);
+      if(idx < 0) return;
+      manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
+      curM = idx;
+      renderStepsList();
+      refreshNavLinks();
     });
 }
 
@@ -2354,7 +2365,9 @@ function openManual(idx){
     `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👷 作業者閲覧</button>
      <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
      <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
-    goHome);
+    ()=>{ if(unsubSteps){unsubSteps();unsubSteps=null;} goHome(); });
+  // ★ この工程のリアルタイムリスナーを起動（遅延読み込み）
+  listenCurrentSteps();
   renderStepsList();
   showScreen('steps');
 }
@@ -2779,7 +2792,7 @@ async function startRec(stepIdx){
       video:{
         facingMode: facingMode,
         width:{ideal:1280, max:1280}, height:{ideal:720, max:720},
-        frameRate:{ideal:30, max:30}
+        frameRate:{ideal:24, max:30}  // 24fps: 20%削減・現場用途で十分
       },
       audio:true
     };
@@ -2848,8 +2861,8 @@ function toggleRec(){
     // 標準画質: 映像2Mbps + 音声96kbps ≒ 1分あたり約15MB
     const opts = mime ? {
       mimeType: mime,
-      videoBitsPerSecond: 1500000,  // 1.5 Mbps（さらに25%削減・画質は十分）
-      audioBitsPerSecond: 64000     // 64 kbps（音声は軽量化）
+      videoBitsPerSecond: 1000000,  // 1 Mbps（現場用途で十分・1分≒7.5MB）
+      audioBitsPerSecond: 64000     // 64 kbps
     } : {};
     try{
       mediaRecorder=new MediaRecorder(mediaStream,opts);
@@ -3163,12 +3176,13 @@ async function uploadTempFiles(manualId, stepId){
   return attachments;
 }
 
-/* ── 工程を再取得してUIを更新 ── */
+/* ── 工程を再取得してUIを更新（リスナーが自動反映するため一時フェッチ） ── */
 async function refreshSteps(){
   if(!curMId) return;
   const snap = await db.collection('manuals').doc(curMId)
     .collection('steps').orderBy('order','asc').get();
-  manuals[curM].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
+  const idx = manuals.findIndex(m=>m.id===curMId);
+  if(idx>=0) manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
   renderStepsList();
 }
 
