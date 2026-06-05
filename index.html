@@ -1190,6 +1190,9 @@ const auth    = firebase.auth();
 const db      = firebase.firestore();
 const storage = firebase.storage();
 
+// 毎回ログインが必要（セッション非永続化）
+auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+
 /* ── AUTH ── */
 let currentUser = null;
 
