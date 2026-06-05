@@ -1857,10 +1857,7 @@ function vwrRender(){
     html+='</div>';
   }
 
-  if(!showVideo && !showText && !atts.length){
-    html+=`<div style="padding:32px;text-align:center;color:var(--text3);font-size:14px">
-      コンテンツがありません</div>`;
-  }
+  // ※ hasVideo/hasText/attsで判定済みのため重複チェック不要
 
   html+=`<div style="height:16px"></div>`; // bottom padding
   document.getElementById('vwr-body').innerHTML=html;
