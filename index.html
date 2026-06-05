@@ -1263,63 +1263,93 @@ body{
       <button onclick="closeGuide()" style="border:none;background:#f0f0ee;border-radius:50%;width:32px;height:32px;cursor:pointer;font-size:16px">×</button>
     </div>
     <div style="padding:18px 22px">
+
       <!-- STEP 1 -->
-      <div style="margin-bottom:20px">
+      <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
           <div style="width:28px;height:28px;border-radius:8px;background:#E8771E;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">1</div>
+          <div style="font-size:15px;font-weight:700">ログインする</div>
+        </div>
+        <div style="font-size:13px;color:#555;line-height:1.7;padding-left:38px">
+          <b>初回：</b>「はじめての方はこちら」からアカウントを作成<br>
+          <b>2回目以降：</b>メールアドレスは自動表示、パスワードのみ入力<br>
+          ※ @westa.co.jp のアドレスのみ使用可
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div style="margin-bottom:18px">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+          <div style="width:28px;height:28px;border-radius:8px;background:#2D8C38;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">2</div>
           <div style="font-size:15px;font-weight:700">部門・チームを作成する</div>
         </div>
         <div style="font-size:13px;color:#555;line-height:1.7;padding-left:38px">
-          上部の「🏢 部門」ボタンから部門とチームを追加します。<br>
-          例：部門「製造部」→ チーム「A班」「B班」
+          上部「🏢 部門」ボタンから部門とチームを追加。<br>
+          例：製造部 → A班・B班<br>
+          名前変更・並び替え・削除もここから行えます。
         </div>
       </div>
-      <!-- STEP 2 -->
-      <div style="margin-bottom:20px">
+
+      <!-- STEP 3 -->
+      <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="width:28px;height:28px;border-radius:8px;background:#2D8C38;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">2</div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#1A9DD4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">3</div>
           <div style="font-size:15px;font-weight:700">マニュアルを作成する</div>
         </div>
         <div style="font-size:13px;color:#555;line-height:1.7;padding-left:38px">
-          「＋ 新規」ボタンからマニュアルを作成。<br>
-          部門・チームを選択してマニュアル名とアイコンを設定します。
+          ホーム画面のチームをタップ → 「＋ 新規」でマニュアルを作成。<br>
+          部門・チーム・アイコンを設定します。<br>
+          作成後は ✏️ ボタンでいつでも編集できます。
         </div>
       </div>
-      <!-- STEP 3 -->
-      <div style="margin-bottom:20px">
+
+      <!-- STEP 4 -->
+      <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="width:28px;height:28px;border-radius:8px;background:#1A9DD4;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">3</div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#8B5CF6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">4</div>
           <div style="font-size:15px;font-weight:700">工程を追加する</div>
         </div>
         <div style="font-size:13px;color:#555;line-height:1.7;padding-left:38px">
-          「＋工程」から工程を追加。コンテンツタイプを選択します：<br>
-          🎥 <b>動画</b>：カメラで作業を録画<br>
-          📄 <b>テキスト</b>：手順をテキストで記載・ファイル添付<br>
-          🎥+📄 <b>両方</b>：動画とテキストを組み合わせ
+          「＋工程」からコンテンツタイプを選択：<br>
+          🎥 <b>動画</b>：カメラで作業を録画（録画後すぐアップロード開始）<br>
+          📄 <b>テキスト</b>：手順をテキスト入力・ファイル添付・🎤音声入力可<br>
+          🎥+📄 <b>両方</b>：動画＋テキストを組み合わせ
         </div>
       </div>
-      <!-- STEP 4 -->
-      <div style="margin-bottom:20px">
+
+      <!-- STEP 5 -->
+      <div style="margin-bottom:18px">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-          <div style="width:28px;height:28px;border-radius:8px;background:#8B5CF6;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">4</div>
+          <div style="width:28px;height:28px;border-radius:8px;background:#E84D00;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;flex-shrink:0">5</div>
           <div style="font-size:15px;font-weight:700">作業者が閲覧する</div>
         </div>
         <div style="font-size:13px;color:#555;line-height:1.7;padding-left:38px">
           マニュアルを開いて「👷 作業者閲覧」をタップ。<br>
-          工程を1つずつ確認しながら作業できます。<br>
-          完了した工程は ✓ ボタンで記録できます。
+          ‹ › ボタンで工程を1つずつ確認しながら作業。<br>
+          完了した工程は ✓ ボタンでチェック → 自動で次の工程へ。
         </div>
       </div>
-      <!-- ヒント -->
-      <div style="background:#f8f6f0;border-radius:12px;padding:14px 16px">
+
+      <!-- 便利な機能 -->
+      <div style="background:#f8f6f0;border-radius:12px;padding:14px 16px;margin-bottom:14px">
         <div style="font-size:12px;font-weight:700;color:#888;margin-bottom:8px">💡 便利な機能</div>
-        <div style="font-size:12px;color:#666;line-height:1.8">
-          • 動画は縦撮り・横撮り自動対応<br>
-          • PDF・Word・Excelをアプリ内で閲覧可能<br>
-          • スマホからも同じURLでアクセス可能<br>
-          • パスワードを忘れたら再設定メールを送信可能
+        <div style="font-size:12px;color:#666;line-height:1.9">
+          🎤 テキスト欄の「音声入力」ボタンで話すだけで入力<br>
+          📱 動画は縦撮り・横撮りで自動フレーム調整<br>
+          📎 PDF・Word・Excel・画像をアプリ内で閲覧可能<br>
+          📶 Wi-Fiなしでも一度見たデータ・動画を閲覧可能<br>
+          🔑 パスワードを忘れたら「パスワードを忘れた方」から再設定<br>
+          ✏️ 工程の種類（動画/テキスト/両方）はあとから変更可能
         </div>
       </div>
+
+      <!-- アクセス -->
+      <div style="background:#eaf0ff;border-radius:12px;padding:12px 16px">
+        <div style="font-size:12px;font-weight:700;color:#1a5fe0;margin-bottom:4px">🌐 アクセスURL</div>
+        <div style="font-size:13px;font-weight:700;color:#1a5fe0">https://fieldmanual-app.web.app</div>
+        <div style="font-size:11px;color:#666;margin-top:4px">PC・スマホどちらでも同じURLでアクセスできます</div>
+      </div>
+
     </div>
     <div style="padding:14px 22px 20px">
       <button onclick="closeGuide()" style="width:100%;padding:13px;border-radius:12px;border:none;background:#18180f;color:#fff;font-size:14px;font-weight:700;cursor:pointer">閉じる</button>
