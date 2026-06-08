@@ -280,6 +280,9 @@ body{
 .rc-title{font-size:15px;font-weight:700;margin-bottom:3px}
 .rc-sub{font-size:12px;color:var(--text3)}
 
+.attach-thumb{width:36px;height:36px;object-fit:cover;border-radius:6px;flex:none;background:var(--bg2)}
+.thumbs-hidden .attach-thumb{display:none}
+
 .step-acts{display:flex;gap:7px;margin-bottom:15px;flex-wrap:wrap}
 
 /* ── RECORDER ── */
@@ -1423,8 +1426,8 @@ db.enablePersistence({synchronizeTabs:true}).catch(e=>{
   else if(e.code==='unimplemented') console.warn('このブラウザはオフラインキャッシュ非対応');
 });
 
-// 毎回ログインが必要（セッション非永続化）
-auth.setPersistence(firebase.auth.Auth.Persistence.NONE);
+// ログイン情報をブラウザに保持し、リロード時の再ログインを不要にする
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
 
 /* ── AUTH ── */
 let currentUser = null;
@@ -1928,13 +1931,20 @@ function vwrRender(){
   // 添付ファイル
   const atts=step.attachments||[];
   if(atts.length>0){
-    html+=`<div style="padding:12px 16px 4px;font-size:12px;font-weight:700;color:var(--text3)">📎 添付ファイル</div>
-      <div class="vwr-files">`;
+    const hasImgAtt=atts.some(a=>(a.type||'').includes('image'));
+    html+=`<div style="padding:12px 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <span style="font-size:12px;font-weight:700;color:var(--text3)">📎 添付ファイル</span>
+        ${hasImgAtt?`<button class="btn btn-ghost btn-sm" id="vwr-thumb-toggle" onclick="toggleVwrThumbs(this)" style="font-size:11px;padding:2px 8px;white-space:nowrap">🖼 サムネイル非表示</button>`:''}
+      </div>
+      <div class="vwr-files" id="vwr-files">`;
     atts.forEach(a=>{
       const act=canPreview(a.type,a.name)
         ?`openFileViewer('${a.name.replace(/'/g,"\\'")}','${a.url}','${a.type||''}')`
         :`window.open('${a.url}','_blank')`;
+      const isImg=(a.type||'').includes('image');
+      const thumb=isImg?`<img src="${a.url}" class="attach-thumb" alt="">`:'';
       html+=`<div class="vwr-file" onclick="${act}">
+        ${thumb}
         <span style="font-size:24px">${fileIcon(a.type)}</span>
         <span class="vwr-file-name">${a.name}</span>
         <span style="font-size:13px;color:var(--blue);white-space:nowrap">${canPreview(a.type,a.name)?'👁 表示':'↗ 開く'}</span>
@@ -2531,8 +2541,10 @@ function renderDetailInto(container,idx){
             <span class="video-dur">⏱ ${step.dur||'--'}</span>
             <div class="video-acts">
               <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})">撮り直す</button>
+              <button class="btn btn-ghost btn-sm" onclick="document.getElementById('video-inp-${idx}').click()">📁 端末から選択</button>
             </div>
           </div>
+          <input type="file" id="video-inp-${idx}" accept="video/*" style="display:none" onchange="uploadVideoFromDevice(${idx},this)">
           ${step.transcript?`<div class="transcript-block">
             <div class="transcript-lbl">📝 テキストメモ</div>
             <div class="transcript-text" contenteditable="true">${step.transcript}</div>
@@ -2544,21 +2556,29 @@ function renderDetailInto(container,idx){
           <div class="rc-icon">🎥</div>
           <div class="rc-title">タップして録画開始</div>
           <div class="rc-sub">この工程の作業を動画で撮影します</div>
-        </div>`;
+        </div>
+        <input type="file" id="video-inp-${idx}" accept="video/*" style="display:none" onchange="uploadVideoFromDevice(${idx},this)">
+        <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center;margin-bottom:15px" onclick="event.stopPropagation();document.getElementById('video-inp-${idx}').click()">📁 端末から動画ファイルを選択してアップロード</button>`;
     }
   }
 
   let textBlock='';
   if(showText){
     const attachments = step.attachments||[];
-    const attHtml = attachments.map((a,ai)=>`
+    const attHtml = attachments.map((a,ai)=>{
+      const isImg=(a.type||'').includes('image');
+      const thumb=isImg?`<img src="${a.url}" class="attach-thumb" alt="">`:'';
+      return `
       <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:5px">
+        ${thumb}
         <span style="font-size:16px">${fileIcon(a.type)}</span>
         <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
         ${canPreview(a.type,a.name)?`<button class="btn btn-ghost btn-sm" onclick="openFileViewer('${a.name.replace(/'/g,"\\'")}','${a.url}','${a.type||''}')" style="color:var(--blue);padding:4px 8px;white-space:nowrap">👁 表示</button>`:''}
         <a href="${a.url}" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
         <button class="btn btn-ghost btn-sm" onclick="deleteAttachment(${idx},${ai})" style="color:var(--accent);padding:4px 8px">🗑</button>
-      </div>`).join('');
+      </div>`;
+    }).join('');
+    const hasImgAtt=attachments.some(a=>(a.type||'').includes('image'));
     textBlock=`
       <div class="text-manual-block">
         <div class="text-manual-lbl">📄 テキストマニュアル</div>
@@ -2568,7 +2588,10 @@ function renderDetailInto(container,idx){
           <button class="btn btn-accent btn-sm" style="flex:1;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
         </div>
         <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-          <div class="text-manual-lbl">📎 添付ファイル</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+            <div class="text-manual-lbl">📎 添付ファイル</div>
+            ${hasImgAtt?`<button class="btn btn-ghost btn-sm" id="thumb-toggle-${idx}" onclick="toggleAttachThumbs(${idx},this)" style="font-size:11px;padding:2px 8px;white-space:nowrap">🖼 サムネイル非表示</button>`:''}
+          </div>
           <div id="attach-list-${idx}" style="margin-bottom:8px">${attHtml||'<div style="font-size:12px;color:var(--text3);padding:4px 0">添付ファイルなし</div>'}</div>
           <input type="file" id="file-inp-${idx}" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.xlsx,.pptx" style="display:none" onchange="uploadAttachment(${idx},this)">
           <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="document.getElementById('file-inp-${idx}').click()">＋ ファイルを添付（PDF・Word・画像など）</button>
@@ -2715,6 +2738,20 @@ function applyAutoVid(containerId, videoId){
   if(wrap&&vid) fitVideoContainer(vid, wrap);
 }
 
+function toggleVwrThumbs(btn){
+  const list=document.getElementById('vwr-files');
+  if(!list) return;
+  const hidden=list.classList.toggle('thumbs-hidden');
+  btn.textContent=hidden?'🖼 サムネイル表示':'🖼 サムネイル非表示';
+}
+
+function toggleAttachThumbs(idx, btn){
+  const list=document.getElementById('attach-list-'+idx);
+  if(!list) return;
+  const hidden=list.classList.toggle('thumbs-hidden');
+  btn.textContent=hidden?'🖼 サムネイル表示':'🖼 サムネイル非表示';
+}
+
 function fileIcon(type){
   if(!type) return '📄';
   if(type.includes('pdf')) return '📕';
@@ -2780,6 +2817,85 @@ function closeFileViewer(){
   document.getElementById('fv-content').style.cssText='flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px';
 }
 
+function getVideoDuration(file){
+  return new Promise(resolve=>{
+    const v=document.createElement('video');
+    v.preload='metadata';
+    v.onloadedmetadata=()=>{
+      URL.revokeObjectURL(v.src);
+      const s=Math.round(v.duration||0);
+      resolve(`${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`);
+    };
+    v.onerror=()=>{ URL.revokeObjectURL(v.src); resolve(null); };
+    v.src=URL.createObjectURL(file);
+  });
+}
+
+async function uploadVideoFromDevice(idx, input){
+  const file = input.files[0];
+  if(!file) return;
+  if(!file.type.startsWith('video/')){ showToast('動画ファイルを選択してください'); input.value=''; return; }
+  if(file.size > 500*1024*1024){ showToast('動画ファイルは500MB以下にしてください'); input.value=''; return; }
+  const step = manuals[curM].steps[idx];
+  showToast('動画をアップロード中...');
+  try{
+    const ext=(file.name.split('.').pop()||'mp4').toLowerCase();
+    const path=`videos/${curMId}/${step.id}/upload_${Date.now()}.${ext}`;
+    const ref=storage.ref(path);
+    const snap=await ref.put(file,{contentType:file.type});
+    const url=await snap.ref.getDownloadURL();
+    const dur=await getVideoDuration(file);
+    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+      videoUrl:url, dur, status:'done',
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+    });
+    manuals[curM].steps[idx].videoUrl=url;
+    manuals[curM].steps[idx].dur=dur;
+    manuals[curM].steps[idx].status='done';
+    renderStepsList();
+    const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+    renderDetailInto(container, idx);
+    showToast('動画をアップロードしました ✓');
+  } catch(e){
+    showToast('アップロードエラー: '+e.message);
+  }
+  input.value='';
+}
+
+// 画像をWebPに変換・圧縮（長辺1920px・品質0.8に統一してアップロード容量を削減）
+function imageToWebp(file, maxDim=1920, quality=0.8){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    img.onload=()=>{
+      let {width,height}=img;
+      if(width>maxDim||height>maxDim){
+        const scale=Math.min(maxDim/width, maxDim/height);
+        width=Math.round(width*scale); height=Math.round(height*scale);
+      }
+      const canvas=document.createElement('canvas');
+      canvas.width=width; canvas.height=height;
+      canvas.getContext('2d').drawImage(img,0,0,width,height);
+      canvas.toBlob(blob=>{
+        URL.revokeObjectURL(img.src);
+        if(!blob){ reject(new Error('画像の変換に失敗しました')); return; }
+        const name=file.name.replace(/\.[^.]+$/,'')+'.webp';
+        resolve(new File([blob], name, { type:'image/webp' }));
+      }, 'image/webp', quality);
+    };
+    img.onerror=()=>{ URL.revokeObjectURL(img.src); reject(new Error('画像の読み込みに失敗しました')); };
+    img.src=URL.createObjectURL(file);
+  });
+}
+
+// アップロード前処理: 画像はWebPに変換（GIF・既にWebPのものはそのまま）
+async function prepareFileForUpload(file){
+  if(file.type.startsWith('image/') && file.type!=='image/webp' && file.type!=='image/gif'){
+    try{ return await imageToWebp(file); }
+    catch(e){ return file; }
+  }
+  return file;
+}
+
 async function uploadAttachment(idx, input){
   const file = input.files[0];
   if(!file) return;
@@ -2787,11 +2903,12 @@ async function uploadAttachment(idx, input){
   const step = manuals[curM].steps[idx];
   showToast('アップロード中...');
   try {
-    const path = `files/${curMId}/${step.id}/${Date.now()}_${file.name}`;
+    const uploadFile = await prepareFileForUpload(file);
+    const path = `files/${curMId}/${step.id}/${Date.now()}_${uploadFile.name}`;
     const ref = storage.ref(path);
-    const snap = await ref.put(file, { contentType: file.type });
+    const snap = await ref.put(uploadFile, { contentType: uploadFile.type });
     const url = await snap.ref.getDownloadURL();
-    const attachments = [...(step.attachments||[]), { name: file.name, url, type: file.type, path }];
+    const attachments = [...(step.attachments||[]), { name: uploadFile.name, url, type: uploadFile.type, path }];
     await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
       attachments, status:'done',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -3322,10 +3439,11 @@ async function uploadTempFiles(manualId, stepId){
   showToast('ファイルをアップロード中...');
   const attachments=[];
   for(const file of tempFiles){
-    const path=`files/${manualId}/${stepId}/${Date.now()}_${file.name}`;
-    const snap=await storage.ref(path).put(file,{contentType:file.type||'application/octet-stream'});
+    const uploadFile=await prepareFileForUpload(file);
+    const path=`files/${manualId}/${stepId}/${Date.now()}_${uploadFile.name}`;
+    const snap=await storage.ref(path).put(uploadFile,{contentType:uploadFile.type||'application/octet-stream'});
     const url=await snap.ref.getDownloadURL();
-    attachments.push({name:file.name, url, type:file.type||'', path});
+    attachments.push({name:uploadFile.name, url, type:uploadFile.type||'', path});
   }
   return attachments;
 }
