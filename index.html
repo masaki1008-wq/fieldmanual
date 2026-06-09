@@ -1931,23 +1931,31 @@ function vwrRender(){
   // 添付ファイル
   const atts=step.attachments||[];
   if(atts.length>0){
-    const hasImgAtt=atts.some(a=>(a.type||'').includes('image'));
-    html+=`<div style="padding:12px 16px 4px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+    html+=`<div style="padding:12px 16px 4px">
         <span style="font-size:12px;font-weight:700;color:var(--text3)">📎 添付ファイル</span>
-        ${hasImgAtt?`<button class="btn btn-ghost btn-sm" id="vwr-thumb-toggle" onclick="toggleVwrThumbs(this)" style="font-size:11px;padding:2px 8px;white-space:nowrap">🖼 サムネイル非表示</button>`:''}
       </div>
-      <div class="vwr-files" id="vwr-files">`;
+      <div style="padding:0 12px 4px">`;
     atts.forEach(a=>{
-      const act=canPreview(a.type,a.name)
-        ?`openFileViewer('${a.name.replace(/'/g,"\\'")}','${a.url}','${a.type||''}')`
-        :`window.open('${a.url}','_blank')`;
       const isImg=(a.type||'').includes('image');
-      const thumb=isImg?`<img src="${a.url}" class="attach-thumb" alt="">`:'';
-      html+=`<div class="vwr-file" onclick="${act}">
-        ${thumb}
-        <span style="font-size:24px">${fileIcon(a.type)}</span>
-        <span class="vwr-file-name">${a.name}</span>
-        <span style="font-size:13px;color:var(--blue);white-space:nowrap">${canPreview(a.type,a.name)?'👁 表示':'↗ 開く'}</span>
+      const isPdf=(a.type||'').includes('pdf')||(a.name||'').toLowerCase().endsWith('.pdf');
+      const safeName=a.name.replace(/'/g,"\\'");
+      let preview='';
+      if(isImg){
+        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block">`;
+      } else if(isPdf){
+        preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+      }
+      const openAct=canPreview(a.type,a.name)
+        ?`openFileViewer('${safeName}','${a.url}','${a.type||''}')`
+        :`window.open('${a.url}','_blank')`;
+      html+=`<div style="background:var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden">
+        ${preview}
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer" onclick="${(!isImg&&!isPdf)?openAct:''}">
+          <span style="font-size:18px">${fileIcon(a.type)}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
+          ${(!isImg&&!isPdf)?`<span style="font-size:12px;color:var(--blue);white-space:nowrap">${canPreview(a.type,a.name)?'👁 表示':'↗ 開く'}</span>`:''}
+          <a href="${a.url}" target="_blank" onclick="event.stopPropagation()" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
+        </div>
       </div>`;
     });
     html+='</div>';
@@ -2567,18 +2575,26 @@ function renderDetailInto(container,idx){
     const attachments = step.attachments||[];
     const attHtml = attachments.map((a,ai)=>{
       const isImg=(a.type||'').includes('image');
-      const thumb=isImg?`<img src="${a.url}" class="attach-thumb" alt="">`:'';
+      const isPdf=(a.type||'').includes('pdf')||(a.name||'').toLowerCase().endsWith('.pdf');
+      const safeName=a.name.replace(/'/g,"\\'");
+      let preview='';
+      if(isImg){
+        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block">`;
+      } else if(isPdf){
+        preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+      }
       return `
-      <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg3);border-radius:8px;margin-bottom:5px">
-        ${thumb}
-        <span style="font-size:16px">${fileIcon(a.type)}</span>
-        <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
-        ${canPreview(a.type,a.name)?`<button class="btn btn-ghost btn-sm" onclick="openFileViewer('${a.name.replace(/'/g,"\\'")}','${a.url}','${a.type||''}')" style="color:var(--blue);padding:4px 8px;white-space:nowrap">👁 表示</button>`:''}
-        <a href="${a.url}" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
-        <button class="btn btn-ghost btn-sm" onclick="deleteAttachment(${idx},${ai})" style="color:var(--accent);padding:4px 8px">🗑</button>
+      <div style="background:var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden">
+        ${preview}
+        <div style="display:flex;align-items:center;gap:8px;padding:7px 10px">
+          <span style="font-size:16px">${fileIcon(a.type)}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
+          ${(!isImg&&!isPdf)&&canPreview(a.type,a.name)?`<button class="btn btn-ghost btn-sm" onclick="openFileViewer('${safeName}','${a.url}','${a.type||''}')" style="color:var(--blue);padding:4px 8px;white-space:nowrap">👁 表示</button>`:''}
+          <a href="${a.url}" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
+          <button class="btn btn-ghost btn-sm" onclick="deleteAttachment(${idx},${ai})" style="color:var(--accent);padding:4px 8px">🗑</button>
+        </div>
       </div>`;
     }).join('');
-    const hasImgAtt=attachments.some(a=>(a.type||'').includes('image'));
     textBlock=`
       <div class="text-manual-block">
         <div class="text-manual-lbl">📄 テキストマニュアル</div>
@@ -2588,10 +2604,7 @@ function renderDetailInto(container,idx){
           <button class="btn btn-accent btn-sm" style="flex:1;justify-content:center" onclick="saveTextContent(${idx})">テキストを保存 ✓</button>
         </div>
         <div style="margin-top:12px;border-top:1px solid var(--border);padding-top:12px">
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:8px">
-            <div class="text-manual-lbl">📎 添付ファイル</div>
-            ${hasImgAtt?`<button class="btn btn-ghost btn-sm" id="thumb-toggle-${idx}" onclick="toggleAttachThumbs(${idx},this)" style="font-size:11px;padding:2px 8px;white-space:nowrap">🖼 サムネイル非表示</button>`:''}
-          </div>
+          <div class="text-manual-lbl">📎 添付ファイル</div>
           <div id="attach-list-${idx}" style="margin-bottom:8px">${attHtml||'<div style="font-size:12px;color:var(--text3);padding:4px 0">添付ファイルなし</div>'}</div>
           <input type="file" id="file-inp-${idx}" accept=".pdf,.doc,.docx,.txt,.png,.jpg,.jpeg,.gif,.xlsx,.pptx" style="display:none" onchange="uploadAttachment(${idx},this)">
           <button class="btn btn-ghost btn-sm" style="width:100%;justify-content:center" onclick="document.getElementById('file-inp-${idx}').click()">＋ ファイルを添付（PDF・Word・画像など）</button>
