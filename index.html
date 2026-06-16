@@ -1953,7 +1953,7 @@ function vwrRender(){
         preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${safeName}','${a.url}','${(a.type||'').replace(/'/g,"\\'")}')">`;
 
       } else if(isPdf){
-        preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+        preview=`<div class="pdf-embed" data-url="${a.url}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
       }
       const openAct=canPreview(a.type,a.name)
         ?`openFileViewer('${safeName}','${a.url}','${a.type||''}')`
@@ -1976,6 +1976,8 @@ function vwrRender(){
   html+=`<div style="height:16px"></div>`; // bottom padding
   document.getElementById('vwr-body').innerHTML=html;
   document.getElementById('vwr-body').scrollTop=0;
+  revokePdfBlobUrls(document.getElementById('vwr-body'));
+  hydratePdfEmbeds(document.getElementById('vwr-body'));
 }
 
 function vwrGo(dir){
@@ -2109,9 +2111,12 @@ async function deleteStepsStorage(stepDocs){
     if(d.videoUrl){
       try{ dels.push(storage.refFromURL(d.videoUrl).delete().catch(()=>{})); }catch(e){}
     }
-    // 添付ファイル: 保存済みpathで削除
+    // 添付ファイル: pathがあればpath指定、なければurlからrefを生成（旧データ互換）
     (d.attachments||[]).forEach(a=>{
-      if(a.path) dels.push(storage.ref(a.path).delete().catch(()=>{}));
+      try{
+        const ref = a.path ? storage.ref(a.path) : (a.url ? storage.refFromURL(a.url) : null);
+        if(ref) dels.push(ref.delete().catch(()=>{}));
+      }catch(e){}
     });
   });
   await Promise.all(dels);
@@ -2634,7 +2639,7 @@ function renderDetailInto(container,idx){
         preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${safeName}','${a.url}','${(a.type||'').replace(/'/g,"\\'")}')">`;
 
       } else if(isPdf){
-        preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+        preview=`<div class="pdf-embed" data-url="${a.url}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
       }
       return `
       <div style="background:var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden">
@@ -2690,6 +2695,8 @@ function renderDetailInto(container,idx){
       <button class="btn btn-ghost btn-sm" onclick="deleteStep(${idx})" style="color:#c23f00;margin-left:auto">削除</button>
     </div>
   `;
+  revokePdfBlobUrls(container);
+  hydratePdfEmbeds(container);
 }
 
 async function saveTextContent(idx){
@@ -2807,6 +2814,36 @@ function applyAutoVid(containerId, videoId){
 // 添付ファイルの自動インライン表示の上限（4G環境での通信量を抑制）
 const ATTACH_AUTO_PREVIEW_BYTES = 8*1024*1024;
 
+// PDF を fetch で取得→blob URL に変換して iframe に渡す
+// （SW の files%2F キャッシュを通るためオフライン・4G環境で再表示が速い）
+const pdfBlobUrls = new WeakMap();
+function revokePdfBlobUrls(container){
+  const urls = pdfBlobUrls.get(container);
+  if(urls) urls.forEach(u=>URL.revokeObjectURL(u));
+  pdfBlobUrls.set(container, []);
+}
+function hydratePdfEmbeds(container){
+  const root = (container.closest && container.closest('#vwr-body,#pc-detail,#mob-detail')) || container;
+  if(!pdfBlobUrls.has(root)) pdfBlobUrls.set(root, []);
+  container.querySelectorAll('.pdf-embed').forEach(el=>{
+    const url=el.dataset.url;
+    fetch(url)
+      .then(r=>r.blob())
+      .then(blob=>{
+        const blobUrl=URL.createObjectURL(blob);
+        pdfBlobUrls.get(root).push(blobUrl);
+        const iframe=document.createElement('iframe');
+        iframe.src=blobUrl;
+        iframe.style.cssText='width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block';
+        el.replaceWith(iframe);
+      })
+      .catch(()=>{
+        // CORS未設定などfetch失敗時は直接iframeにフォールバック
+        el.outerHTML=`<iframe src="${url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+      });
+  });
+}
+
 // 大きい添付ファイルはタップ後に読み込む
 function loadAttachPreview(el){
   const url=el.dataset.url, kind=el.dataset.kind, name=el.dataset.name||'';
@@ -2814,7 +2851,10 @@ function loadAttachPreview(el){
   if(kind==='img'){
     media=`<img src="${url}" alt="${name}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${name.replace(/'/g,"\\'")}','${url}','image/jpeg')">`;
   } else {
-    media=`<iframe src="${url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+    const parent=el.parentElement;
+    el.outerHTML=`<div class="pdf-embed" data-url="${url}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
+    if(parent) hydratePdfEmbeds(parent);
+    return;
   }
   el.outerHTML=media;
 }
