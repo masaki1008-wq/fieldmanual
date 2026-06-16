@@ -1,5 +1,5 @@
 // Service Worker - 動画・添付ファイルキャッシュ
-const APP_CACHE   = 'fm-app-v2';
+const APP_CACHE   = 'fm-app-v3';
 const VIDEO_CACHE = 'fm-videos-v2';
 const FILE_CACHE  = 'fm-files-v1';
 
@@ -106,7 +106,20 @@ self.addEventListener('fetch', e => {
     return;
   }
 
-  // アプリファイル（HTML/画像）はキャッシュ優先
+  // index.html はネットワーク優先（常に最新版を取得し、オフライン時だけキャッシュを使用）
+  if((url.endsWith('/') || url.endsWith('/index.html')) && url.includes(self.location.origin)){
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const c = caches.open(APP_CACHE).then(cache => cache.put(e.request, res.clone()));
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // その他のアプリファイル（画像など）はキャッシュ優先
   if(url.includes(self.location.origin) && !url.includes('firebasestorage')){
     e.respondWith(
       caches.match(e.request).then(cached => cached || fetch(e.request))
