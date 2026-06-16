@@ -2097,10 +2097,42 @@ async function saveManualEdit(){
   }catch(e){showToast('エラー: '+e.message);}
 }
 
-async function deleteManual(){
-  if(!confirm('このマニュアルを削除しますか？\n工程データもすべて削除されます。')) return;
+// マニュアル一覧カードの削除ボタン用（curMIdに依存しない）
+async function deleteManualById(id, name){
+  if(!confirm(`「${name}」を削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。`)) return;
+  showToast('削除中...');
   try{
-    // 工程をすべて削除
+    await deleteStorageDir(`videos/${id}`);
+    await deleteStorageDir(`files/${id}`);
+    const steps=await db.collection('manuals').doc(id).collection('steps').get();
+    const batch=db.batch();
+    steps.forEach(s=>batch.delete(s.ref));
+    await batch.commit();
+    await db.collection('manuals').doc(id).delete();
+    showToast('マニュアルを削除しました');
+  }catch(e){showToast('エラー: '+e.message);}
+}
+
+// Storageのフォルダ以下を再帰的に削除（listAll → 個別delete）
+async function deleteStorageDir(prefix){
+  try{
+    const ref=storage.ref(prefix);
+    const res=await ref.listAll();
+    await Promise.all([
+      ...res.items.map(item=>item.delete().catch(()=>{})),
+      ...res.prefixes.map(p=>deleteStorageDir(p.fullPath))
+    ]);
+  }catch(e){}
+}
+
+async function deleteManual(){
+  if(!confirm('このマニュアルを削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。')) return;
+  showToast('削除中...');
+  try{
+    // Storage上の動画・添付ファイルを削除
+    await deleteStorageDir(`videos/${curMId}`);
+    await deleteStorageDir(`files/${curMId}`);
+    // 工程サブコレクションを削除
     const steps=await db.collection('manuals').doc(curMId).collection('steps').get();
     const batch=db.batch();
     steps.forEach(s=>batch.delete(s.ref));
@@ -2228,6 +2260,7 @@ function makeManualCard(m, i){
     <div class="mc-top">
       <div class="mc-icon" style="background:${m.color}20">${m.icon}</div>
       <div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-meta">${m.steps.length}工程</div></div>
+      <button class="btn btn-ghost btn-sm" style="padding:4px 8px;color:var(--text3)" onclick="event.stopPropagation();deleteManualById('${m.id}','${m.name.replace(/'/g,"\\'")}')" title="削除">🗑</button>
       <div class="mc-chev">›</div>
     </div>
     <div class="mc-prog">
