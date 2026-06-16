@@ -1950,7 +1950,8 @@ function vwrRender(){
           <span>タップして表示（${sizeMb}MB）</span>
         </div>`;
       } else if(isImg){
-        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block">`;
+        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${safeName}','${a.url}','${(a.type||'').replace(/'/g,"\\'")}')">`;
+
       } else if(isPdf){
         preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
       }
@@ -2098,44 +2099,46 @@ async function saveManualEdit(){
 }
 
 // マニュアル一覧カードの削除ボタン用（curMIdに依存しない）
+// 工程リストからStorageファイルをパス/URL指定で削除
+// （storage.rules に list 権限不要）
+async function deleteStepsStorage(stepDocs){
+  const dels=[];
+  stepDocs.forEach(doc=>{
+    const d=doc.data();
+    // 動画: videoUrlからrefを生成して削除
+    if(d.videoUrl){
+      try{ dels.push(storage.refFromURL(d.videoUrl).delete().catch(()=>{})); }catch(e){}
+    }
+    // 添付ファイル: 保存済みpathで削除
+    (d.attachments||[]).forEach(a=>{
+      if(a.path) dels.push(storage.ref(a.path).delete().catch(()=>{}));
+    });
+  });
+  await Promise.all(dels);
+}
+
 async function deleteManualById(id, name){
   if(!confirm(`「${name}」を削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。`)) return;
   showToast('削除中...');
   try{
-    await deleteStorageDir(`videos/${id}`);
-    await deleteStorageDir(`files/${id}`);
-    const steps=await db.collection('manuals').doc(id).collection('steps').get();
+    const stepsSnap=await db.collection('manuals').doc(id).collection('steps').get();
+    await deleteStepsStorage(stepsSnap.docs);
     const batch=db.batch();
-    steps.forEach(s=>batch.delete(s.ref));
+    stepsSnap.docs.forEach(s=>batch.delete(s.ref));
     await batch.commit();
     await db.collection('manuals').doc(id).delete();
     showToast('マニュアルを削除しました');
   }catch(e){showToast('エラー: '+e.message);}
 }
 
-// Storageのフォルダ以下を再帰的に削除（listAll → 個別delete）
-async function deleteStorageDir(prefix){
-  try{
-    const ref=storage.ref(prefix);
-    const res=await ref.listAll();
-    await Promise.all([
-      ...res.items.map(item=>item.delete().catch(()=>{})),
-      ...res.prefixes.map(p=>deleteStorageDir(p.fullPath))
-    ]);
-  }catch(e){}
-}
-
 async function deleteManual(){
   if(!confirm('このマニュアルを削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。')) return;
   showToast('削除中...');
   try{
-    // Storage上の動画・添付ファイルを削除
-    await deleteStorageDir(`videos/${curMId}`);
-    await deleteStorageDir(`files/${curMId}`);
-    // 工程サブコレクションを削除
-    const steps=await db.collection('manuals').doc(curMId).collection('steps').get();
+    const stepsSnap=await db.collection('manuals').doc(curMId).collection('steps').get();
+    await deleteStepsStorage(stepsSnap.docs);
     const batch=db.batch();
-    steps.forEach(s=>batch.delete(s.ref));
+    stepsSnap.docs.forEach(s=>batch.delete(s.ref));
     await batch.commit();
     await db.collection('manuals').doc(curMId).delete();
     hideSheet('sheet-edit-manual');
@@ -2628,7 +2631,8 @@ function renderDetailInto(container,idx){
           <span>タップして表示（${sizeMb}MB）</span>
         </div>`;
       } else if(isImg){
-        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block">`;
+        preview=`<img src="${a.url}" alt="${safeName}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${safeName}','${a.url}','${(a.type||'').replace(/'/g,"\\'")}')">`;
+
       } else if(isPdf){
         preview=`<iframe src="${a.url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
       }
@@ -2808,7 +2812,7 @@ function loadAttachPreview(el){
   const url=el.dataset.url, kind=el.dataset.kind, name=el.dataset.name||'';
   let media;
   if(kind==='img'){
-    media=`<img src="${url}" alt="${name}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block">`;
+    media=`<img src="${url}" alt="${name}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" onclick="openFileViewer('${name.replace(/'/g,"\\'")}','${url}','image/jpeg')">`;
   } else {
     media=`<iframe src="${url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
   }
