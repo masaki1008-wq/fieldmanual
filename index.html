@@ -1731,10 +1731,10 @@ function renderDeptMgr(){
     dEl.style.cssText = 'background:var(--bg3);border-radius:12px;padding:12px;margin-bottom:10px';
     dEl.innerHTML = `
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
-        <span style="font-size:14px;font-weight:700;flex:1">🏢 ${dept.name}</span>
+        <span style="font-size:14px;font-weight:700;flex:1">🏢 ${hesc(dept.name)}</span>
         <button class="team-act-btn" onclick="moveDept('${dept.id}',-1)">↑</button>
         <button class="team-act-btn" onclick="moveDept('${dept.id}',1)">↓</button>
-        <button class="team-act-btn" onclick="promptRenameDept('${dept.id}','${dept.name.replace(/'/g,"\\'")}')">✏️</button>
+        <button class="team-act-btn" data-did="${dept.id}" data-dname="${hesc(dept.name)}" onclick="promptRenameDeptFromEl(this)">✏️</button>
         <button class="team-act-btn" onclick="deleteDept('${dept.id}')" style="color:var(--accent)">🗑</button>
       </div>
       <div id="team-list-${dept.id}" style="margin-bottom:6px"></div>
@@ -1749,10 +1749,10 @@ function renderDeptMgr(){
       const tEl = document.createElement('div');
       tEl.style.cssText = 'display:flex;align-items:center;gap:6px;padding:7px 10px;background:#fff;border-radius:8px;margin-bottom:5px;border:1px solid var(--border)';
       tEl.innerHTML = `
-        <span style="font-size:13px;flex:1">👥 ${team.name}</span>
+        <span style="font-size:13px;flex:1">👥 ${hesc(team.name)}</span>
         <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',-1)">↑</button>
         <button class="team-act-btn" onclick="moveTeam('${dept.id}','${team.id}',1)">↓</button>
-        <button class="team-act-btn" onclick="promptRenameTeam('${dept.id}','${team.id}','${team.name.replace(/'/g,"\\'")}')">✏️</button>
+        <button class="team-act-btn" data-did="${dept.id}" data-tid="${team.id}" data-tname="${hesc(team.name)}" onclick="promptRenameTeamFromEl(this)">✏️</button>
         <button class="team-act-btn" onclick="deleteTeam('${dept.id}','${team.id}')" style="color:var(--accent)">🗑</button>
       `;
       teamList.appendChild(tEl);
@@ -1888,8 +1888,8 @@ function vwrRender(){
   const hasText = !!textBody;
 
   let html=`
-    <div class="vwr-step-name">${step.name}</div>
-    ${step.desc?`<div class="vwr-step-desc">${step.desc}</div>`:''}
+    <div class="vwr-step-name">${hesc(step.name)}</div>
+    ${step.desc?`<div class="vwr-step-desc">${hesc(step.desc)}</div>`:''}
   `;
 
   // 動画
@@ -1958,7 +1958,7 @@ function vwrRender(){
         ${preview}
         <div style="display:flex;align-items:center;gap:8px;padding:7px 10px;cursor:pointer" data-url="${hesc(a.url)}" data-type="${hesc(a.type||'')}" data-name="${hesc(a.name)}" onclick="${(!isImg&&!isPdf)?'openAttachFromEl(this)':''}">
           <span style="font-size:18px">${fileIcon(a.type)}</span>
-          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${hesc(a.name)}</span>
           ${(!isImg&&!isPdf)?`<span style="font-size:12px;color:var(--blue);white-space:nowrap">${canPreview(a.type,a.name)?'👁 表示':'↗ 開く'}</span>`:''}
           <a href="${hesc(a.url)}" target="_blank" onclick="event.stopPropagation()" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
         </div>
@@ -2263,7 +2263,7 @@ function makeManualCard(m, i){
   c.innerHTML=`
     <div class="mc-top">
       <div class="mc-icon" style="background:${m.color}20">${m.icon}</div>
-      <div class="mc-info"><div class="mc-name">${m.name}</div><div class="mc-meta">${m.steps.length}工程</div></div>
+      <div class="mc-info"><div class="mc-name">${hesc(m.name)}</div><div class="mc-meta">${m.steps.length}工程</div></div>
       <button class="btn btn-ghost btn-sm" style="padding:4px 8px;color:var(--text3)" data-mid="${m.id}" data-mname="${hesc(m.name)}" onclick="event.stopPropagation();deleteManualByEl(this)" title="削除">🗑</button>
       <div class="mc-chev">›</div>
     </div>
@@ -2306,7 +2306,7 @@ function renderHome(){
     const header=document.createElement('div');
     header.className='dept-header';
     header.innerHTML=`
-      <span class="dept-name">🏢 ${dept.name}</span>
+      <span class="dept-name">🏢 ${hesc(dept.name)}</span>
       <span style="font-size:11px;color:rgba(255,255,255,.5);background:rgba(255,255,255,.1);padding:2px 8px;border-radius:10px">${totalInDept}件</span>
     `;
     dEl.appendChild(header);
@@ -2325,7 +2325,7 @@ function renderHome(){
       tCard.innerHTML=`
         <div class="team-header" style="padding:12px 14px">
           <span style="font-size:18px;margin-right:4px">👥</span>
-          <span class="team-name" style="font-size:14px">${team.name}</span>
+          <span class="team-name" style="font-size:14px">${hesc(team.name)}</span>
           <span style="font-size:11px;color:var(--text3);margin-right:6px">${items.length}件</span>
           <span style="font-size:18px;color:var(--text3)">›</span>
         </div>
@@ -2487,7 +2487,7 @@ function renderSidebarNav(el){
           const done=m.steps.filter(s=>s.status==='done').length;
           return `<button class="nav-btn" onclick="sbOpenManual(${i})">
             <span style="font-size:14px">${m.icon}</span>
-            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${m.name}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${hesc(m.name)}</span>
             <span class="nav-count">${done}/${m.steps.length}</span>
           </button>`;
         }).join('');
@@ -2523,7 +2523,7 @@ function renderStepsList(){
   document.getElementById('steps-hero').innerHTML=`
     <div class="hero-top">
       <div class="hero-icon">${m.icon}</div>
-      <div><div class="hero-name">${m.name}</div><div class="hero-dept">${m.dept} · ${m.steps.length}工程</div></div>
+      <div><div class="hero-name">${hesc(m.name)}</div><div class="hero-dept">${hesc(m.dept||'')} · ${m.steps.length}工程</div></div>
     </div>
     <div class="hero-pb"><div class="hero-pf" style="width:${pct}%;background:${m.color}"></div></div>
     <div class="hero-pl">${done} / ${m.steps.length} 工程に動画あり (${pct}%)</div>
@@ -2537,8 +2537,8 @@ function renderStepsList(){
     row.innerHTML=`
       <div class="step-num ${step.status==='done'?'sn-done':'sn-todo'}">${i+1}</div>
       <div class="step-row-info">
-        <div class="step-row-name">${step.name}</div>
-        <div class="step-row-meta">${step.status==='done'?'⏱ '+step.dur+' · 録画済み':(step.desc||'未録画')}</div>
+        <div class="step-row-name">${hesc(step.name)}</div>
+        <div class="step-row-meta">${step.status==='done'?'⏱ '+hesc(step.dur||'')+' · 録画済み':hesc(step.desc||'未録画')}</div>
       </div>
       <div class="step-badge ${step.status==='done'?'sb-done':'sb-todo'}">${step.status==='done'?'✓':'未録画'}</div>
       <div class="step-chev">›</div>
@@ -2641,7 +2641,7 @@ function renderDetailInto(container,idx){
         ${preview}
         <div style="display:flex;align-items:center;gap:8px;padding:7px 10px">
           <span style="font-size:16px">${fileIcon(a.type)}</span>
-          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${a.name}</span>
+          <span style="flex:1;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)">${hesc(a.name)}</span>
           ${(!isImg&&!isPdf)&&canPreview(a.type,a.name)?`<button class="btn btn-ghost btn-sm" data-fv-name="${hesc(a.name)}" data-fv-url="${hesc(a.url)}" data-fv-type="${hesc(a.type||'')}" onclick="openFileViewerFromEl(this)" style="color:var(--blue);padding:4px 8px;white-space:nowrap">👁 表示</button>`:''}
           <a href="${hesc(a.url)}" target="_blank" class="btn btn-ghost btn-sm" style="padding:4px 8px;white-space:nowrap;text-decoration:none">⬇</a>
           <button class="btn btn-ghost btn-sm" onclick="deleteAttachment(${idx},${ai})" style="color:var(--accent);padding:4px 8px">🗑</button>
@@ -2671,8 +2671,8 @@ function renderDetailInto(container,idx){
     <div class="sd-hdr">
       <div class="sd-num">${idx+1}</div>
       <div style="flex:1;min-width:0">
-        <div class="sd-title">${step.name}</div>
-        ${step.desc?`<div class="sd-desc">${step.desc}</div>`:''}
+        <div class="sd-title">${hesc(step.name)}</div>
+        ${step.desc?`<div class="sd-desc">${hesc(step.desc)}</div>`:''}
         <div style="margin-top:4px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
           <span style="font-size:11px;background:var(--bg3);padding:2px 8px;border-radius:10px;color:var(--text3)">
             ${ctype==='video'?'🎥 動画':ctype==='text'?'📄 テキスト':'🎥+📄 両方'}
@@ -2833,14 +2833,17 @@ function hydratePdfEmbeds(container){
         el.replaceWith(iframe);
       })
       .catch(()=>{
-        // CORS未設定などfetch失敗時は直接iframeにフォールバック
-        el.outerHTML=`<iframe src="${url}" style="width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block"></iframe>`;
+        // CORS未設定などfetch失敗時は直接iframeにフォールバック（DOM APIでsrc設定 — HTML解析を経由しない）
+        const fb=document.createElement('iframe');
+        fb.src=url;
+        fb.style.cssText='width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block';
+        el.replaceWith(fb);
       });
   });
 }
 
-// HTML属性値のエスケープ（&と"のみ — XSS対策）
-function hesc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;'); }
+// HTML属性値・テキストコンテンツのエスケープ（属性値・innerHTML両方で使用可能）
+function hesc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 // data-fv-* 属性からファイルビューアを開く（onclick文字列内に値を埋め込まない）
 function openFileViewerFromEl(el){ openFileViewer(el.dataset.fvName||'', el.dataset.fvUrl||'', el.dataset.fvType||''); }
@@ -2854,6 +2857,10 @@ function openAttachFromEl(el){
 
 // data-mid/data-mname属性からマニュアル削除（名前に"が含まれてもonclick属性が壊れない）
 function deleteManualByEl(el){ deleteManualById(el.dataset.mid, el.dataset.mname); }
+
+// data属性から部門・チーム名変更（名前に"が含まれてもonclick属性が壊れない）
+function promptRenameDeptFromEl(el){ promptRenameDept(el.dataset.did, el.dataset.dname); }
+function promptRenameTeamFromEl(el){ promptRenameTeam(el.dataset.did, el.dataset.tid, el.dataset.tname); }
 
 // 大きい添付ファイルはタップ後に読み込む
 function loadAttachPreview(el){
