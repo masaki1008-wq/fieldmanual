@@ -1215,6 +1215,7 @@ body{
     </div>
     <div class="sheet-btns">
       <button class="btn-s bsa" onclick="saveManualEdit()">変更を保存</button>
+      <button class="btn-s bsg" style="color:var(--amber)" onclick="deleteAllSteps()">全工程をまとめて削除</button>
       <button class="btn-s bsg" style="color:var(--accent)" onclick="deleteManual()">マニュアルを削除</button>
       <button class="btn-s bsg" onclick="hideSheet('sheet-edit-manual')">キャンセル</button>
     </div>
@@ -1238,6 +1239,7 @@ body{
     </div>
     <div class="sheet-btns">
       <button class="btn-s bsa" onclick="saveStepEdit()">変更を保存</button>
+      <button class="btn-s bsg" style="color:var(--accent)" onclick="deleteStepFromEdit()">この工程を削除</button>
       <button class="btn-s bsg" onclick="hideSheet('sheet-edit-step')">キャンセル</button>
     </div>
   </div>
@@ -1661,6 +1663,12 @@ function listenManuals(){
         const existing = manuals.find(m => m.id === doc.id);
         return { id: doc.id, ...doc.data(), steps: existing?.steps || [] };
       });
+      // curMId を元に curM インデックスを再同期（他ユーザーの削除でインデックスがずれる対策）
+      if(curMId){
+        const newIdx = manuals.findIndex(m => m.id === curMId);
+        if(newIdx >= 0) curM = newIdx;
+        else { curM = null; curMId = null; curS = null; curSId = null; }
+      }
       renderHome();
       refreshNavLinks();
     });
@@ -2194,6 +2202,12 @@ function openStepEdit(idx){
   // 現在のインデックスをシートに保存
   document.getElementById('sheet-edit-step').dataset.idx=idx;
   showSheet('sheet-edit-step');
+}
+
+function deleteStepFromEdit(){
+  const idx=parseInt(document.getElementById('sheet-edit-step').dataset.idx);
+  hideSheet('sheet-edit-step');
+  deleteStep(idx);
 }
 
 async function saveStepEdit(){
@@ -3130,15 +3144,56 @@ async function moveStep(idx,dir){
 }
 
 async function deleteStep(idx){
-  const stepId = manuals[curM].steps[idx].id;
-  await db.collection('manuals').doc(curMId).collection('steps').doc(stepId).delete();
-  manuals[curM].steps.splice(idx, 1);
-  curS=null; curSId=null;
-  renderStepsList();
-  const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
-  document.getElementById('pc-detail').innerHTML=emptyHtml;
-  if(isMobile()) showScreen('steps');
-  showToast('工程を削除しました');
+  if(!confirm('この工程を削除しますか？\n動画・添付ファイルも削除されます。')) return;
+  const step = manuals[curM].steps[idx];
+  try{
+    // Storageファイルを削除（動画・添付ファイル）
+    const dels=[];
+    if(step.videoUrl){
+      try{ dels.push(storage.refFromURL(step.videoUrl).delete().catch(()=>{})); }catch(e){}
+    }
+    (step.attachments||[]).forEach(a=>{
+      try{
+        const ref=a.path?storage.ref(a.path):(a.url?storage.refFromURL(a.url):null);
+        if(ref) dels.push(ref.delete().catch(()=>{}));
+      }catch(e){}
+    });
+    await Promise.all(dels);
+    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).delete();
+    manuals[curM].steps.splice(idx,1);
+    curS=null; curSId=null;
+    renderStepsList();
+    const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
+    if(!isMobile()) document.getElementById('pc-detail').innerHTML=emptyHtml;
+    if(isMobile()) showScreen('steps');
+    showToast('工程を削除しました');
+  }catch(e){showToast('エラー: '+e.message);}
+}
+
+// 全工程をまとめて削除（マニュアル自体は残す）
+async function deleteAllSteps(){
+  const m=manuals[curM];
+  if(!m||!m.steps.length){showToast('削除する工程がありません');return;}
+  if(!confirm(`「${m.name}」の全${m.steps.length}工程を削除しますか？\n動画・添付ファイルも含めてすべて削除されます。`)) return;
+  showToast('削除中...');
+  try{
+    const stepsSnap=await db.collection('manuals').doc(curMId).collection('steps').get();
+    await deleteStepsStorage(stepsSnap.docs);
+    const CHUNK=499;
+    const docs=stepsSnap.docs;
+    for(let i=0;i<docs.length;i+=CHUNK){
+      const batch=db.batch();
+      docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
+      await batch.commit();
+    }
+    manuals[curM].steps=[];
+    curS=null; curSId=null;
+    hideSheet('sheet-edit-manual');
+    renderStepsList();
+    const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
+    if(!isMobile()) document.getElementById('pc-detail').innerHTML=emptyHtml;
+    showToast('全工程を削除しました');
+  }catch(e){showToast('エラー: '+e.message);}
 }
 
 /* ── RECORDER (real camera) ── */
