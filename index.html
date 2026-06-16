@@ -1586,7 +1586,12 @@ const ALLOWED_DOMAIN = 'westa.co.jp';
 auth.onAuthStateChanged(async user => {
   currentUser = user;
   if(!user){
-    // 未ログイン時はフォームを初期化
+    // 全リスナーを解除してからフォームを初期化
+    if(unsubManuals){ unsubManuals(); unsubManuals=null; }
+    if(unsubDepts){ unsubDepts(); unsubDepts=null; }
+    if(unsubSteps){ unsubSteps(); unsubSteps=null; }
+    manuals=[]; departments=[];
+    curM=null; curMId=null; curS=null; curSId=null;
     initLoginForm();
   }
   if(user){
@@ -2124,10 +2129,21 @@ async function deleteManualById(id, name){
   try{
     const stepsSnap=await db.collection('manuals').doc(id).collection('steps').get();
     await deleteStepsStorage(stepsSnap.docs);
-    const batch=db.batch();
-    stepsSnap.docs.forEach(s=>batch.delete(s.ref));
-    await batch.commit();
+    // Firestoreバッチは499件上限のため分割処理
+    const CHUNK=499;
+    const docs=stepsSnap.docs;
+    for(let i=0;i<docs.length;i+=CHUNK){
+      const batch=db.batch();
+      docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
+      await batch.commit();
+    }
     await db.collection('manuals').doc(id).delete();
+    // 削除したマニュアルが現在開いていた場合はホームへ戻る
+    if(id===curMId){
+      if(unsubSteps){unsubSteps();unsubSteps=null;}
+      curM=null;curMId=null;curS=null;curSId=null;
+      goHome();
+    }
     showToast('マニュアルを削除しました');
   }catch(e){showToast('エラー: '+e.message);}
 }
@@ -2136,12 +2152,19 @@ async function deleteManual(){
   if(!confirm('このマニュアルを削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。')) return;
   showToast('削除中...');
   try{
-    const stepsSnap=await db.collection('manuals').doc(curMId).collection('steps').get();
+    const id=curMId;
+    const stepsSnap=await db.collection('manuals').doc(id).collection('steps').get();
     await deleteStepsStorage(stepsSnap.docs);
-    const batch=db.batch();
-    stepsSnap.docs.forEach(s=>batch.delete(s.ref));
-    await batch.commit();
-    await db.collection('manuals').doc(curMId).delete();
+    const CHUNK=499;
+    const docs=stepsSnap.docs;
+    for(let i=0;i<docs.length;i+=CHUNK){
+      const batch=db.batch();
+      docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
+      await batch.commit();
+    }
+    await db.collection('manuals').doc(id).delete();
+    if(unsubSteps){unsubSteps();unsubSteps=null;}
+    curM=null;curMId=null;curS=null;curSId=null;
     hideSheet('sheet-edit-manual');
     goHome();
     showToast('マニュアルを削除しました');
@@ -2255,7 +2278,7 @@ function makeManualCard(m, i){
   const done=m.steps.filter(s=>s.status==='done').length;
   const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
   const chips=m.steps.slice(0,3).map(s=>
-    `<span class="chip ${s.status==='done'?'chip-done':'chip-todo'}">${s.status==='done'?'✓':'⬜'} ${s.name}</span>`
+    `<span class="chip ${s.status==='done'?'chip-done':'chip-todo'}">${s.status==='done'?'✓':'⬜'} ${hesc(s.name)}</span>`
   ).join('');
   const more=m.steps.length>3?`<span class="chip chip-todo">+${m.steps.length-3}工程</span>`:'';
   const c=document.createElement('div');
@@ -2896,13 +2919,14 @@ function fileIcon(type){
 
 function canPreview(type, name){
   if(!type&&!name) return false;
+  const t=(type||'').toLowerCase();
   const n=(name||'').toLowerCase();
-  if(type.includes('image')) return true;
-  if(type.includes('pdf')||n.endsWith('.pdf')) return true;
-  if(type.includes('word')||type.includes('document')||n.endsWith('.docx')||n.endsWith('.doc')) return true;
-  if(type.includes('sheet')||type.includes('excel')||n.endsWith('.xlsx')||n.endsWith('.xls')) return true;
-  if(type.includes('presentation')||type.includes('powerpoint')||n.endsWith('.pptx')||n.endsWith('.ppt')) return true;
-  if(type.includes('text')||n.endsWith('.txt')) return true;
+  if(t.includes('image')) return true;
+  if(t.includes('pdf')||n.endsWith('.pdf')) return true;
+  if(t.includes('word')||t.includes('document')||n.endsWith('.docx')||n.endsWith('.doc')) return true;
+  if(t.includes('sheet')||t.includes('excel')||n.endsWith('.xlsx')||n.endsWith('.xls')) return true;
+  if(t.includes('presentation')||t.includes('powerpoint')||n.endsWith('.pptx')||n.endsWith('.ppt')) return true;
+  if(t.includes('text')||n.endsWith('.txt')) return true;
   return false;
 }
 

@@ -1,5 +1,5 @@
 // Service Worker - 動画・添付ファイルキャッシュ
-const APP_CACHE   = 'fm-app-v4';
+const APP_CACHE   = 'fm-app-v5';
 const VIDEO_CACHE = 'fm-videos-v2';
 const FILE_CACHE  = 'fm-files-v1';
 
@@ -100,7 +100,7 @@ self.addEventListener('fetch', e => {
             const len = isOpaque ? 0 : parseInt(res.headers.get('content-length')||'0', 10);
             if(!len || len <= FILE_CACHE_MAX_BYTES){
               await cache.put(cacheKey, res.clone());
-              trimCache(FILE_CACHE, FILE_CACHE_MAX_ENTRIES);
+              await trimCache(FILE_CACHE, FILE_CACHE_MAX_ENTRIES);
             }
           }
           return res;
