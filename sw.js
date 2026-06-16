@@ -1,5 +1,5 @@
 // Service Worker - 動画・添付ファイルキャッシュ
-const APP_CACHE   = 'fm-app-v3';
+const APP_CACHE   = 'fm-app-v4';
 const VIDEO_CACHE = 'fm-videos-v2';
 const FILE_CACHE  = 'fm-files-v1';
 
@@ -61,10 +61,16 @@ self.addEventListener('fetch', e => {
         // ネットワークから取得してキャッシュに保存
         try {
           const res = await fetch(e.request);
-          // <video src> はno-corsのためopaque応答(status:0)になる場合がある
-          const cacheable = (res.ok || res.type==='opaque') && !e.request.headers.get('range');
-          if(cacheable){
+          const isRange = !!e.request.headers.get('range');
+          const cacheable = res.ok || res.type==='opaque';
+          if(cacheable && !isRange){
             cache.put(cacheKey, res.clone());
+          } else if(cacheable && isRange){
+            // Rangeリクエストはそのまま返しつつ、バックグラウンドでフル取得してキャッシュ
+            // 次回再生時はキャッシュから即座に返せる
+            fetch(url).then(full => {
+              if(full.ok || full.type==='opaque') cache.put(cacheKey, full);
+            }).catch(()=>{});
           }
           return res;
         } catch(err) {
