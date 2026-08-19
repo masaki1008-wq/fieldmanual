@@ -25,13 +25,19 @@
   --safe-t:env(safe-area-inset-top,0px);
   --shadow:0 1px 3px rgba(0,0,0,.07),0 4px 16px rgba(0,0,0,.05);
 }
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
 html,body{height:100%;overflow:hidden}
 body{
   font-family:var(--font);background:var(--bg);color:var(--text);
   /* lock viewport on mobile to prevent scroll bounce */
   position:fixed;width:100%;height:100%;
   display:flex;
+  overscroll-behavior:none;
+}
+/* スクロール可能エリアにmomentumスクロールとGPU最適化 */
+.sb,.steps-scroll,.pub-scroll,.vwr-body,.sidebar-nav{
+  overscroll-behavior:contain;
+  scroll-behavior:auto; /* JSによる即時スクロールのため */
 }
 
 /* ── SIDEBAR (desktop only) ── */
@@ -1215,8 +1221,7 @@ body{
     </div>
     <div class="sheet-btns">
       <button class="btn-s bsa" onclick="saveManualEdit()">変更を保存</button>
-      <button class="btn-s bsg" style="color:var(--amber)" onclick="deleteAllSteps()">全工程をまとめて削除</button>
-      <button class="btn-s bsg" style="color:var(--accent)" onclick="deleteManual()">マニュアルを削除</button>
+      <button class="btn-s bsg" style="color:var(--accent)" onclick="deleteManual()">マニュアルを削除（工程・動画含む）</button>
       <button class="btn-s bsg" onclick="hideSheet('sheet-edit-manual')">キャンセル</button>
     </div>
   </div>
@@ -1390,6 +1395,19 @@ if('serviceWorker' in navigator){
     .then(()=>console.log('SW登録完了'))
     .catch(e=>console.warn('SW登録失敗',e));
 }
+
+/* ── Live Reload（開発サーバー(server.js)使用時のみ: 保存すると自動でページを再読込） ── */
+(function(){
+  const h=location.hostname;
+  const isDevHost = h==='localhost' || /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(h);
+  if(!isDevHost || typeof EventSource==='undefined') return;
+  function connect(){
+    const es=new EventSource('/livereload');
+    es.onmessage=e=>{ if(e.data==='reload') location.reload(); };
+    es.onerror=()=>{ es.close(); setTimeout(connect, 2000); };
+  }
+  connect();
+})();
 
 /* ── オフライン検知 ── */
 function updateOnlineStatus(){
@@ -1592,6 +1610,11 @@ auth.onAuthStateChanged(async user => {
     if(unsubManuals){ unsubManuals(); unsubManuals=null; }
     if(unsubDepts){ unsubDepts(); unsubDepts=null; }
     if(unsubSteps){ unsubSteps(); unsubSteps=null; }
+    // アップロード中のタスクをキャンセル
+    if(bgAbortCtrl && !bgUploadDone){ try{ bgAbortCtrl.abort(); }catch(e){} }
+    resetBgUpload(); recordedBlob=null;
+    pendingStepVideos.forEach(url=>{ try{URL.revokeObjectURL(url);}catch(e){} }); pendingStepVideos.clear();
+    stopStream();
     manuals=[]; departments=[];
     curM=null; curMId=null; curS=null; curSId=null;
     initLoginForm();
@@ -1667,9 +1690,19 @@ function listenManuals(){
       if(curMId){
         const newIdx = manuals.findIndex(m => m.id === curMId);
         if(newIdx >= 0) curM = newIdx;
-        else { curM = null; curMId = null; curS = null; curSId = null; }
+        else {
+          curM = null; curMId = null; curS = null; curSId = null;
+          if(unsubSteps){ unsubSteps(); unsubSteps=null; }
+          // 閲覧中の画面が対象マニュアルの場合は、削除されたことを通知してホームへ戻す
+          if(currentScreen!=='home' && currentScreen!=='team'){
+            showToast('このマニュアルは削除されました');
+            goHome();
+          }
+        }
       }
-      renderHome();
+      // home/team画面のときだけ即描画、それ以外は遅延描画（録画中は触らない）
+      if(currentScreen==='home'||currentScreen==='team') renderHome();
+      else _renderHomeDb();
       refreshNavLinks();
     });
 }
@@ -1679,14 +1712,44 @@ let unsubSteps = null;
 function listenCurrentSteps(){
   if(unsubSteps){ unsubSteps(); unsubSteps=null; }
   if(!curMId) return;
-  unsubSteps = db.collection('manuals').doc(curMId)
+  const listenMId = curMId; // コールバック時のcurMId変化によるデータ混入を防ぐ
+  unsubSteps = db.collection('manuals').doc(listenMId)
     .collection('steps').orderBy('order','asc')
     .onSnapshot(snap => {
-      const idx = manuals.findIndex(m => m.id === curMId);
+      const idx = manuals.findIndex(m => m.id === listenMId);
       if(idx < 0) return;
+      // このリスナーが現在のマニュアルと異なる場合はUI更新をスキップ
+      if(listenMId !== curMId) { manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()})); return; }
       manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
       curM = idx;
-      renderStepsList();
+      // 工程が増減した場合にcurSが古いインデックスを指す可能性があるため、curSIdで再計算
+      if(curSId && idx === curM){
+        const newS = manuals[idx].steps.findIndex(s => s.id === curSId);
+        if(newS >= 0) curS = newS;
+      }
+      // Firebase URLが届いた工程のローカルblobURLを解放
+      if(pendingStepVideos.size>0){
+        manuals[idx].steps.forEach(s=>{
+          if(s.videoUrl && pendingStepVideos.has(s.id)){
+            try{URL.revokeObjectURL(pendingStepVideos.get(s.id));}catch(e){}
+            pendingStepVideos.delete(s.id);
+          }
+        });
+      }
+      // 録画中・プレビュー中はUI再描画しない（変数を壊さないため）
+      if(currentScreen!=='recorder'&&currentScreen!=='preview'){
+        _renderStepsDb();
+        // 工程詳細画面を表示中なら詳細も再描画（バックグラウンド動画URL更新を反映）
+        if(curS!=null){
+          if(currentScreen==='step-detail'){
+            const c=document.getElementById('mob-detail');
+            if(c) renderDetailInto(c,curS);
+          } else if(currentScreen==='steps'&&!isMobile()){
+            const c=document.getElementById('pc-detail');
+            if(c) renderDetailInto(c,curS);
+          }
+        }
+      }
       refreshNavLinks();
     });
 }
@@ -1873,6 +1936,7 @@ function openViewer(){
 }
 
 function vwrRender(){
+  if(curM==null||!manuals[curM]) return;
   const m=manuals[curM];
   const steps=m.steps;
   const step=steps[vwrIdx];
@@ -1896,7 +1960,9 @@ function vwrRender(){
   doneBtn.textContent=isDone?'✓ 完了済み（タップで取消）':'✓ この工程を完了にする';
 
   // 閲覧モードではコンテンツタイプに関わらず存在するものをすべて表示
-  const hasVideo = !!step.videoUrl;
+  // アップロード完了前はローカルblobURLを代用
+  const effectiveVideoUrl = step.videoUrl || pendingStepVideos.get(step.id) || null;
+  const hasVideo = !!effectiveVideoUrl;
   const textBody = step.textContent || step.transcript || '';
   const hasText = !!textBody;
 
@@ -1910,7 +1976,7 @@ function vwrRender(){
     html+=`<div class="vwr-video auto-vid-wrap" id="vwr-vid-wrap" style="height:240px">
       <video id="vwr-vid" controls playsinline preload="auto"
         style="width:100%;height:100%;object-fit:contain;background:#000"
-        src="${step.videoUrl}"
+        src="${effectiveVideoUrl}"
         onloadedmetadata="fitVideoContainer(this,document.getElementById('vwr-vid-wrap'))"
         oncanplay="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='none')"
         onwaiting="document.getElementById('vwr-loading')&&(document.getElementById('vwr-loading').style.display='flex')">
@@ -1924,6 +1990,9 @@ function vwrRender(){
           border-top-color:#fff;border-radius:50%;animation:spin .8s linear infinite"></div>
         <div style="color:rgba(255,255,255,.7);font-size:12px">読み込み中...</div>
       </div>
+    </div>
+    <div style="text-align:right;margin-top:6px">
+      <button class="btn btn-ghost btn-sm" id="vwr-mute-btn" onclick="toggleVideoMute('vwr-vid','vwr-mute-btn')">🔊 ミュート</button>
     </div>`;
   }
 
@@ -1933,7 +2002,7 @@ function vwrRender(){
       <div style="padding:12px 16px 4px">
         <div style="font-size:11px;font-weight:700;color:var(--text3);letter-spacing:.5px">📝 テキスト</div>
       </div>
-      <div class="vwr-text">${textBody.replace(/</g,'&lt;')}</div>`;
+      <div class="vwr-text">${hesc(textBody)}</div>`;
   }
 
   // 動画もテキストもない場合
@@ -1965,7 +2034,7 @@ function vwrRender(){
         preview=`<img src="${hesc(a.url)}" alt="${hesc(a.name)}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" data-fv-name="${hesc(a.name)}" data-fv-url="${hesc(a.url)}" data-fv-type="${hesc(a.type||'')}" onclick="openFileViewerFromEl(this)">`;
 
       } else if(isPdf){
-        preview=`<div class="pdf-embed" data-url="${hesc(a.url)}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
+        preview=`<div class="pdf-embed" data-url="${hesc(a.url)}" data-name="${hesc(a.name)}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
       }
       html+=`<div style="background:var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden">
         ${preview}
@@ -2098,12 +2167,12 @@ async function saveManualEdit(){
     m.deptId=deptId||null; m.deptName=dept?.name||null;
     m.teamId=teamId||null; m.teamName=team?.name||null;
     hideSheet('sheet-edit-manual');
-    // トップバーを更新
+    // トップバーを更新（openManual と同じボタン構成）
     setTB(name,
-      `<button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
-       <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>
-       <button class="btn btn-accent btn-sm" onclick="openPublish()">公開</button>`,
-      goHome);
+      `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👷 作業者閲覧</button>
+       <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+       <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
+      ()=>{ if(unsubSteps){unsubSteps();unsubSteps=null;} goHome(); });
     renderHome();
     showToast('マニュアルを更新しました ✓');
   }catch(e){showToast('エラー: '+e.message);}
@@ -2114,20 +2183,16 @@ async function saveManualEdit(){
 // （storage.rules に list 権限不要）
 async function deleteStepsStorage(stepDocs){
   const dels=[];
-  stepDocs.forEach(doc=>{
+  for(const doc of stepDocs){
     const d=doc.data();
-    // 動画: videoUrlからrefを生成して削除
     if(d.videoUrl){
-      try{ dels.push(storage.refFromURL(d.videoUrl).delete().catch(()=>{})); }catch(e){}
+      dels.push(storage.refFromURL(d.videoUrl).delete().catch(e=>console.warn('Storage動画削除失敗:',e.code)));
     }
-    // 添付ファイル: pathがあればpath指定、なければurlからrefを生成（旧データ互換）
-    (d.attachments||[]).forEach(a=>{
-      try{
-        const ref = a.path ? storage.ref(a.path) : (a.url ? storage.refFromURL(a.url) : null);
-        if(ref) dels.push(ref.delete().catch(()=>{}));
-      }catch(e){}
-    });
-  });
+    for(const a of (d.attachments||[])){
+      const ref=a.path?storage.ref(a.path):(a.url?storage.refFromURL(a.url):null);
+      if(ref) dels.push(ref.delete().catch(e=>console.warn('Storage添付削除失敗:',e.code)));
+    }
+  }
   await Promise.all(dels);
 }
 
@@ -2159,24 +2224,29 @@ async function deleteManualById(id, name){
 async function deleteManual(){
   if(!confirm('このマニュアルを削除しますか？\n動画・添付ファイルを含むすべてのデータが削除されます。')) return;
   showToast('削除中...');
+  const id=curMId;
+  let stepsSnap;
   try{
-    const id=curMId;
-    const stepsSnap=await db.collection('manuals').doc(id).collection('steps').get();
-    await deleteStepsStorage(stepsSnap.docs);
-    const CHUNK=499;
-    const docs=stepsSnap.docs;
-    for(let i=0;i<docs.length;i+=CHUNK){
-      const batch=db.batch();
-      docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
+    stepsSnap=await db.collection('manuals').doc(id).collection('steps').get();
+  }catch(e){showToast('エラー(steps読込): '+e.message);return;}
+  await deleteStepsStorage(stepsSnap.docs);
+  const CHUNK=499;
+  const docs=stepsSnap.docs;
+  for(let i=0;i<docs.length;i+=CHUNK){
+    const batch=db.batch();
+    docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
+    try{
       await batch.commit();
-    }
+    }catch(e){showToast('エラー(steps削除): '+e.message);return;}
+  }
+  try{
     await db.collection('manuals').doc(id).delete();
-    if(unsubSteps){unsubSteps();unsubSteps=null;}
-    curM=null;curMId=null;curS=null;curSId=null;
-    hideSheet('sheet-edit-manual');
-    goHome();
-    showToast('マニュアルを削除しました');
-  }catch(e){showToast('エラー: '+e.message);}
+  }catch(e){showToast('エラー(manual削除): '+e.message);return;}
+  if(unsubSteps){unsubSteps();unsubSteps=null;}
+  curM=null;curMId=null;curS=null;curSId=null;
+  hideSheet('sheet-edit-manual');
+  goHome();
+  showToast('マニュアルを削除しました');
 }
 
 /* ── 工程編集 ── */
@@ -2256,10 +2326,16 @@ let selIco='🏭';
 const isMobile=()=>window.innerWidth<768;
 
 /* ── SCREEN ── */
+let currentScreen='home';
 function showScreen(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById('screen-'+id).classList.add('active');
+  currentScreen=id;
 }
+
+function debounce(fn,ms){let t;return function(...a){clearTimeout(t);t=setTimeout(()=>fn(...a),ms);};}
+const _renderHomeDb=debounce(()=>renderHome(),80);
+const _renderStepsDb=debounce(()=>renderStepsList(),80);
 
 /* ── TOPBAR ── */
 let savedBackFn=null;
@@ -2500,7 +2576,7 @@ function renderSidebarNav(el){
     const teamRows = teams.length===0
       ? '<div style="font-size:11px;color:rgba(255,255,255,.3);padding:8px 12px">チームがありません</div>'
       : teams.map((t,i)=>{
-          const cnt=manuals.filter(m=>m.deptId===dept.id&&m.teamId===t.id).length;
+          const cnt=manuals.filter(m=>m.deptId===dept?.id&&m.teamId===t.id).length;
           return `<button class="nav-btn" onclick="sbGoTeam(${i})">
             <span style="font-size:14px">👥</span>
             <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px">${t.name}</span>
@@ -2553,6 +2629,7 @@ function openManual(idx){
 }
 
 function renderStepsList(){
+  if(curM==null||!manuals[curM]) return;
   const m=manuals[curM];
   const done=m.steps.filter(s=>s.status==='done').length;
   const pct=m.steps.length?Math.round(done/m.steps.length*100):0;
@@ -2560,10 +2637,10 @@ function renderStepsList(){
   document.getElementById('steps-hero').innerHTML=`
     <div class="hero-top">
       <div class="hero-icon">${m.icon}</div>
-      <div><div class="hero-name">${hesc(m.name)}</div><div class="hero-dept">${hesc(m.dept||'')} · ${m.steps.length}工程</div></div>
+      <div><div class="hero-name">${hesc(m.name)}</div><div class="hero-dept">${hesc(m.deptName||m.dept||'')} · ${m.steps.length}工程</div></div>
     </div>
     <div class="hero-pb"><div class="hero-pf" style="width:${pct}%;background:${m.color}"></div></div>
-    <div class="hero-pl">${done} / ${m.steps.length} 工程に動画あり (${pct}%)</div>
+    <div class="hero-pl">${done} / ${m.steps.length} 工程完了 (${pct}%)</div>
   `;
 
   const area=document.getElementById('steps-scroll');area.innerHTML='';
@@ -2575,9 +2652,9 @@ function renderStepsList(){
       <div class="step-num ${step.status==='done'?'sn-done':'sn-todo'}">${i+1}</div>
       <div class="step-row-info">
         <div class="step-row-name">${hesc(step.name)}</div>
-        <div class="step-row-meta">${step.status==='done'?'⏱ '+hesc(step.dur||'')+' · 録画済み':hesc(step.desc||'未録画')}</div>
+        <div class="step-row-meta">${step.status==='done'?(step.contentType==='text'?'✅ テキスト保存済み':('⏱ '+hesc(step.dur||'')+' · 録画済み')):hesc(step.desc||((step.contentType==='text')?'未入力':'未録画'))}</div>
       </div>
-      <div class="step-badge ${step.status==='done'?'sb-done':'sb-todo'}">${step.status==='done'?'✓':'未録画'}</div>
+      <div class="step-badge ${step.status==='done'?'sb-done':'sb-todo'}">${step.status==='done'?'✓':(step.contentType==='text'?'未入力':'未録画')}</div>
       <div class="step-chev">›</div>
     `;
     row.onclick=()=>selectStep(i);
@@ -2607,14 +2684,18 @@ function selectStep(idx){
 }
 
 function renderDetailInto(container,idx){
+  if(curM==null||!manuals[curM]?.steps[idx]||!container) return;
   const m=manuals[curM];
-  const step=m.steps[idx];
+  let step=m.steps[idx];
   const ctype=step.contentType||'video';
   const showVideo=(ctype==='video'||ctype==='both');
   const showText=(ctype==='text'||ctype==='both');
 
   let videoBlock='';
   if(showVideo){
+    // アップロード前でもローカルblobURLで即時再生
+    const effectiveUrl = step.videoUrl || pendingStepVideos.get(step.id) || null;
+    if(effectiveUrl && !step.videoUrl) step=Object.assign({},step,{videoUrl:effectiveUrl});
     if(step.videoUrl){
       videoBlock=`
         <div class="video-block">
@@ -2631,6 +2712,7 @@ function renderDetailInto(container,idx){
           <div class="video-meta">
             <span class="video-dur">⏱ ${step.dur||'--'}</span>
             <div class="video-acts">
+              <button class="btn btn-ghost btn-sm" id="mute-btn-${idx}" onclick="toggleVideoMute('vplayer-${idx}','mute-btn-${idx}')">🔊 ミュート</button>
               <button class="btn btn-ghost btn-sm" onclick="startRec(${idx})">撮り直す</button>
               <button class="btn btn-ghost btn-sm" onclick="document.getElementById('video-inp-${idx}').click()">📁 端末から選択</button>
             </div>
@@ -2638,8 +2720,17 @@ function renderDetailInto(container,idx){
           <input type="file" id="video-inp-${idx}" accept="video/*" style="display:none" onchange="uploadVideoFromDevice(${idx},this)">
           ${step.transcript?`<div class="transcript-block">
             <div class="transcript-lbl">📝 テキストメモ</div>
-            <div class="transcript-text" contenteditable="true">${step.transcript}</div>
+            <div class="transcript-text" contenteditable="true">${hesc(step.transcript||'')}</div>
           </div>`:''}
+        </div>`;
+    } else if(step.status==='done'){
+      // 動画URLがまだない＝バックグラウンドアップロード中
+      videoBlock=`
+        <div class="record-cta" style="cursor:default;opacity:.85">
+          <div class="rc-icon" style="font-size:32px">📤</div>
+          <div class="rc-title" style="font-size:15px">動画アップロード中...</div>
+          <div class="rc-sub" style="margin-bottom:12px">しばらくするとここに動画が表示されます</div>
+          <button class="btn btn-ghost btn-sm" style="opacity:1" onclick="startRec(${idx})">撮り直す</button>
         </div>`;
     } else {
       videoBlock=`
@@ -2671,7 +2762,7 @@ function renderDetailInto(container,idx){
         preview=`<img src="${hesc(a.url)}" alt="${hesc(a.name)}" style="width:100%;max-height:320px;object-fit:contain;border-radius:8px 8px 0 0;background:var(--bg2);display:block;cursor:pointer" data-fv-name="${hesc(a.name)}" data-fv-url="${hesc(a.url)}" data-fv-type="${hesc(a.type||'')}" onclick="openFileViewerFromEl(this)">`;
 
       } else if(isPdf){
-        preview=`<div class="pdf-embed" data-url="${hesc(a.url)}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
+        preview=`<div class="pdf-embed" data-url="${hesc(a.url)}" data-name="${hesc(a.name)}" style="width:100%;height:300px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;align-items:center;justify-content:center;color:var(--text3);font-size:12px">📄 読み込み中...</div>`;
       }
       return `
       <div style="background:var(--bg3);border-radius:8px;margin-bottom:8px;overflow:hidden">
@@ -2732,6 +2823,7 @@ function renderDetailInto(container,idx){
 }
 
 async function saveTextContent(idx){
+  if(curM==null||!manuals[curM]?.steps[idx]){showToast('工程が見つかりません');return;}
   const step=manuals[curM].steps[idx];
   const text=document.getElementById('text-area-'+idx).value.trim();
   await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
@@ -2846,36 +2938,20 @@ function applyAutoVid(containerId, videoId){
 // 添付ファイルの自動インライン表示の上限（4G環境での通信量を抑制）
 const ATTACH_AUTO_PREVIEW_BYTES = 8*1024*1024;
 
-// PDF を fetch で取得→blob URL に変換して iframe に渡す
-// （SW の files%2F キャッシュを通るためオフライン・4G環境で再表示が速い）
-const pdfBlobUrls = new WeakMap();
-function revokePdfBlobUrls(container){
-  const urls = pdfBlobUrls.get(container);
-  if(urls) urls.forEach(u=>URL.revokeObjectURL(u));
-  pdfBlobUrls.set(container, []);
-}
+// PDF embed: 直接iframeで表示（CORSエラーを避け、SWキャッシュもiframe経由で効く）
+// fetchアプローチはCORS未設定環境で失敗するため廃止
+function revokePdfBlobUrls(){}  // 後方互換のために残す（何もしない）
 function hydratePdfEmbeds(container){
-  const root = (container.closest && container.closest('#vwr-body,#pc-detail,#mob-detail')) || container;
-  if(!pdfBlobUrls.has(root)) pdfBlobUrls.set(root, []);
   container.querySelectorAll('.pdf-embed').forEach(el=>{
     const url=el.dataset.url;
-    fetch(url)
-      .then(r=>r.blob())
-      .then(blob=>{
-        const blobUrl=URL.createObjectURL(blob);
-        pdfBlobUrls.get(root).push(blobUrl);
-        const iframe=document.createElement('iframe');
-        iframe.src=blobUrl;
-        iframe.style.cssText='width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block';
-        el.replaceWith(iframe);
-      })
-      .catch(()=>{
-        // CORS未設定などfetch失敗時は直接iframeにフォールバック（DOM APIでsrc設定 — HTML解析を経由しない）
-        const fb=document.createElement('iframe');
-        fb.src=url;
-        fb.style.cssText='width:100%;height:300px;border:none;border-radius:8px 8px 0 0;display:block';
-        el.replaceWith(fb);
-      });
+    if(!url) return;
+    const name=el.dataset.name||'PDF';
+    // モバイルでiframeのPDFはスクロールできないためモーダルで開くボタンに統一
+    const btn=document.createElement('div');
+    btn.style.cssText='width:100%;height:90px;border-radius:8px 8px 0 0;background:var(--bg2);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:pointer;border-bottom:1px solid var(--border)';
+    btn.innerHTML='<span style="font-size:26px">📕</span><span style="font-size:12px;color:var(--blue);font-weight:600">タップして全ページ表示</span>';
+    btn.onclick=()=>openFileViewer(name, url, 'application/pdf');
+    el.replaceWith(btn);
   });
 }
 
@@ -2944,6 +3020,8 @@ function canPreview(type, name){
   return false;
 }
 
+let fvActiveBlobUrl=null; // オフラインPDF表示用のBlob URL（モーダルを閉じたら解放）
+
 function openFileViewer(name, url, type){
   const modal=document.getElementById('file-viewer-modal');
   const content=document.getElementById('fv-content');
@@ -2957,11 +3035,26 @@ function openFileViewer(name, url, type){
 
   if(t.includes('image')){
     // 画像：直接表示
-    content.innerHTML=`<img src="${url}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">`;
+    content.innerHTML=`<img src="${hesc(url)}" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:8px">`;
   } else if(t.includes('pdf')||n.endsWith('.pdf')){
-    // PDF：iframeで表示
-    content.style.cssText='flex:1;overflow:hidden;display:flex;width:100%;padding:0';
-    content.innerHTML=`<iframe src="${url}" style="width:100%;height:100%;border:none"></iframe>`;
+    // PDF：オンライン時はGoogle Docs Viewerで全ページ表示（iframe直表示はモバイルで1ページしか見えないため）
+    // オフライン時はGoogle側に到達できないため、SWキャッシュ済みファイルをBlobで直接表示する
+    content.style.cssText='flex:1;overflow:hidden;display:flex;flex-direction:column;width:100%;padding:0';
+    const dlLink=`<a href="${hesc(url)}" target="_blank" style="display:block;padding:5px 14px;background:rgba(255,255,255,.06);color:#aaa;font-size:11px;text-decoration:none;text-align:right;flex-shrink:0;white-space:nowrap">⧉ 別タブで開く</a>`;
+    if(navigator.onLine){
+      content.innerHTML=dlLink+`<iframe src="https://docs.google.com/viewer?url=${encodeURIComponent(url)}&embedded=true" style="flex:1;min-height:0;width:100%;border:none"></iframe>`;
+      // オフライン時にも表示できるようSWの添付ファイルキャッシュへ裏で保存
+      fetch(url).catch(()=>{});
+    } else {
+      content.innerHTML=dlLink+'<div style="color:rgba(255,255,255,.5);font-size:13px;padding:20px">読み込み中...</div>';
+      fetch(url).then(r=>r.blob()).then(blob=>{
+        if(fvActiveBlobUrl){ try{URL.revokeObjectURL(fvActiveBlobUrl);}catch(e){} }
+        fvActiveBlobUrl=URL.createObjectURL(blob);
+        content.innerHTML=dlLink+`<iframe src="${fvActiveBlobUrl}" style="flex:1;min-height:0;width:100%;border:none"></iframe>`;
+      }).catch(()=>{
+        content.innerHTML=dlLink+'<div style="color:rgba(255,255,255,.5);font-size:13px;padding:20px">オフラインのためこのファイルは表示できません（未キャッシュ）</div>';
+      });
+    }
   } else if(t.includes('text')||n.endsWith('.txt')){
     // テキスト：fetchして表示
     fetch(url).then(r=>r.text()).then(text=>{
@@ -2984,6 +3077,99 @@ function closeFileViewer(){
   modal.style.display='none';
   document.getElementById('fv-content').innerHTML='';
   document.getElementById('fv-content').style.cssText='flex:1;overflow:auto;display:flex;align-items:center;justify-content:center;padding:8px';
+  if(fvActiveBlobUrl){ try{URL.revokeObjectURL(fvActiveBlobUrl);}catch(e){} fvActiveBlobUrl=null; }
+}
+
+// 動画を720p/1.5Mbpsに圧縮（100MB超のファイルのみ）。非対応ブラウザはオリジナルを返す
+async function compressVideoIfNeeded(file, onProgress){
+  const THRESHOLD = 100 * 1024 * 1024; // 100MB
+  if(file.size <= THRESHOLD) return file;
+  if(typeof MediaRecorder === 'undefined') return file;
+
+  return new Promise(resolve=>{
+    const video = document.createElement('video');
+    video.playsInline = true;
+    // AudioContextがmediaElementSourceを乗っ取るため muted=false でも音は出ない
+    video.muted = false;
+    video.style.cssText = 'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(video);
+    const objUrl = URL.createObjectURL(file);
+    video.src = objUrl;
+
+    const fallback = ()=>{ cleanup(); resolve(file); };
+    const cleanup = ()=>{
+      try{ cancelAnimationFrame(animId); }catch(e){}
+      try{ URL.revokeObjectURL(objUrl); document.body.removeChild(video); }catch(e){}
+      try{ audioCtx && audioCtx.close(); }catch(e){}
+    };
+    let animId = null;
+    let audioCtx = null;
+
+    video.onerror = fallback;
+    video.onloadedmetadata = ()=>{
+      try{
+        const vw = video.videoWidth, vh = video.videoHeight, dur = video.duration;
+        if(!vw || !vh || !dur || dur === Infinity){ fallback(); return; }
+
+        const TARGET_W = 1280;
+        const scale = Math.min(1, TARGET_W / vw);
+        const w = Math.floor(vw * scale / 2) * 2 || vw;
+        const h = Math.floor(vh * scale / 2) * 2 || vh;
+
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if(!canvas.captureStream){ fallback(); return; }
+
+        const videoStream = canvas.captureStream(30);
+
+        // 音声：AudioContextで無音ルーティング（createMediaElementSourceがspk出力を乗っ取る）
+        let audioTracks = [];
+        try{
+          audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          const src2 = audioCtx.createMediaElementSource(video);
+          const dest = audioCtx.createMediaStreamDestination();
+          src2.connect(dest); // audioCtx.destinationには繋がない→スピーカーに出ない
+          audioTracks = dest.stream.getAudioTracks();
+        }catch(e){}
+
+        const combined = new MediaStream([...videoStream.getVideoTracks(), ...audioTracks]);
+        const mimeType = ['video/webm;codecs=vp8,opus','video/webm;codecs=vp8','video/webm','video/mp4']
+          .find(t => MediaRecorder.isTypeSupported(t)) || '';
+
+        let recorder;
+        try{
+          recorder = new MediaRecorder(combined, {
+            ...(mimeType ? {mimeType} : {}),
+            videoBitsPerSecond: 1_500_000
+          });
+        }catch(e){ fallback(); return; }
+
+        const chunks = [];
+        recorder.ondataavailable = e=>{ if(e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = ()=>{
+          cleanup();
+          if(chunks.length === 0){ resolve(file); return; }
+          const blob = new Blob(chunks, {type: recorder.mimeType || 'video/webm'});
+          resolve(blob.size < file.size ? blob : file);
+        };
+
+        const drawFrame = ()=>{
+          if(!video.paused && !video.ended) ctx.drawImage(video, 0, 0, w, h);
+          animId = requestAnimationFrame(drawFrame);
+        };
+        video.ontimeupdate = ()=>{
+          if(dur > 0) onProgress && onProgress(Math.round(video.currentTime / dur * 100));
+        };
+        video.onended = ()=>{
+          cancelAnimationFrame(animId);
+          setTimeout(()=>{ if(recorder.state === 'recording') recorder.stop(); }, 300);
+        };
+        video.onplay = ()=>{ recorder.start(1000); drawFrame(); };
+        video.play().catch(fallback);
+      }catch(e){ fallback(); }
+    };
+  });
 }
 
 function getVideoDuration(file){
@@ -3002,33 +3188,79 @@ function getVideoDuration(file){
 
 async function uploadVideoFromDevice(idx, input){
   const file = input.files[0];
+  input.value='';
   if(!file) return;
-  if(!file.type.startsWith('video/')){ showToast('動画ファイルを選択してください'); input.value=''; return; }
-  if(file.size > 500*1024*1024){ showToast('動画ファイルは500MB以下にしてください'); input.value=''; return; }
+  if(!file.type.startsWith('video/')){ showToast('動画ファイルを選択してください'); return; }
+  if(file.size > 500*1024*1024){ showToast('動画ファイルは500MB以下にしてください'); return; }
+  if(curM==null||!manuals[curM]?.steps[idx]){ showToast('工程が見つかりません'); return; }
   const step = manuals[curM].steps[idx];
-  showToast('動画をアップロード中...');
+  const capturedMId = curMId;
+  const capturedStepId = step.id;
+
+  // ローカルblobURLをセットして即時再生できるようにする
+  const localUrl = URL.createObjectURL(file);
+  pendingStepVideos.set(capturedStepId, localUrl);
+  manuals[curM].steps[idx].status = 'done';
+  manuals[curM].steps[idx].videoUrl = null;
+  renderStepsList();
+  const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+  renderDetailInto(container, idx);
+
+  // 100MB超は720p/1.5Mbpsに圧縮してからアップロード
+  let uploadBlob = file;
+  const origExt = (file.name.split('.').pop()||'mp4').toLowerCase();
+  if(file.size > 100*1024*1024){
+    showToast('動画を圧縮中... 0%（動画の長さ分かかります）');
+    try{
+      uploadBlob = await compressVideoIfNeeded(file, pct=>{
+        showToast(`動画を圧縮中... ${pct}%`);
+      });
+    }catch(e){ uploadBlob = file; }
+    if(uploadBlob !== file){
+      showToast(`圧縮完了 ${(file.size/1024/1024).toFixed(0)}MB→${(uploadBlob.size/1024/1024).toFixed(0)}MB アップロード開始...`);
+    }
+  }
+
+  // バックグラウンドでFirebase Storageにアップロード
+  if(uploadBlob === file) showToast('動画をアップロード中... 0%');
   try{
-    const ext=(file.name.split('.').pop()||'mp4').toLowerCase();
-    const path=`videos/${curMId}/${step.id}/upload_${Date.now()}.${ext}`;
+    const isCompressed = uploadBlob !== file;
+    const ext = isCompressed ? (uploadBlob.type.includes('mp4') ? 'mp4' : 'webm') : origExt;
+    const path=`videos/${capturedMId}/${capturedStepId}/upload_${Date.now()}.${ext}`;
     const ref=storage.ref(path);
-    const snap=await ref.put(file,{contentType:file.type});
+    const contentType = uploadBlob.type || (isCompressed ? 'video/webm' : `video/${origExt}`);
+    const task=ref.put(uploadBlob,{contentType});
+    task.on('state_changed', snap=>{
+      const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
+      showToast(`動画をアップロード中... ${pct}%`);
+    });
+    const snap=await task;
     const url=await snap.ref.getDownloadURL();
     const dur=await getVideoDuration(file);
-    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+    await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId).update({
       videoUrl:url, dur, status:'done',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    manuals[curM].steps[idx].videoUrl=url;
-    manuals[curM].steps[idx].dur=dur;
-    manuals[curM].steps[idx].status='done';
-    renderStepsList();
-    const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
-    renderDetailInto(container, idx);
+    // ローカルblobURLを解放
+    if(pendingStepVideos.has(capturedStepId)){
+      try{URL.revokeObjectURL(pendingStepVideos.get(capturedStepId));}catch(e){}
+      pendingStepVideos.delete(capturedStepId);
+    }
     showToast('動画をアップロードしました ✓');
   } catch(e){
+    console.error('ファイルアップロードエラー:', e);
+    // blobURLを解放してステータスをリセット
+    if(pendingStepVideos.has(capturedStepId)){
+      try{URL.revokeObjectURL(pendingStepVideos.get(capturedStepId));}catch(e2){}
+      pendingStepVideos.delete(capturedStepId);
+    }
+    const mIdx=manuals.findIndex(m=>m.id===capturedMId);
+    if(mIdx>=0){
+      const sIdx=manuals[mIdx].steps.findIndex(s=>s.id===capturedStepId);
+      if(sIdx>=0){ manuals[mIdx].steps[sIdx].status='todo'; manuals[mIdx].steps[sIdx].videoUrl=null; }
+    }
     showToast('アップロードエラー: '+e.message);
   }
-  input.value='';
 }
 
 // 画像をWebPに変換・圧縮（長辺1920px・品質0.8に統一してアップロード容量を削減）
@@ -3067,49 +3299,81 @@ async function prepareFileForUpload(file){
 
 async function uploadAttachment(idx, input){
   const file = input.files[0];
+  input.value='';
   if(!file) return;
   if(file.size > 50*1024*1024){ showToast('ファイルサイズは50MB以下にしてください'); return; }
+  if(curM==null||!manuals[curM]?.steps[idx]){ showToast('工程が見つかりません'); return; }
   const step = manuals[curM].steps[idx];
+  const capturedMId2 = curMId;
+  const capturedStepId2 = step.id;
   showToast('アップロード中...');
   try {
     const uploadFile = await prepareFileForUpload(file);
-    const path = `files/${curMId}/${step.id}/${Date.now()}_${uploadFile.name}`;
+    const path = `files/${capturedMId2}/${capturedStepId2}/${Date.now()}_${uploadFile.name}`;
     const ref = storage.ref(path);
     const snap = await ref.put(uploadFile, { contentType: uploadFile.type });
     const url = await snap.ref.getDownloadURL();
-    const attachments = [...(step.attachments||[]), { name: uploadFile.name, url, type: uploadFile.type, path, size: uploadFile.size }];
-    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
-      attachments, status:'done',
+    const attachment = { name: uploadFile.name, url, type: uploadFile.type, path, size: uploadFile.size };
+    // arrayUnionでFirestoreへ書き込むため、ローカルのattachments配列を読まずに済む
+    // （awaitの間にcurSが変化して工程が見つからなくなっても添付データが失われない）
+    await db.collection('manuals').doc(capturedMId2).collection('steps').doc(capturedStepId2).update({
+      attachments: firebase.firestore.FieldValue.arrayUnion(attachment), status:'done',
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
-    manuals[curM].steps[idx].attachments = attachments;
-    manuals[curM].steps[idx].status = 'done';
-    renderStepsList();
-    const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
-    renderDetailInto(container, idx);
+    // ローカル表示の即時更新は工程が見つかった場合のみ（見つからない場合はリスナーが後で反映）
+    const mIdx2=manuals.findIndex(m=>m.id===capturedMId2);
+    const sIdx2=mIdx2>=0?manuals[mIdx2].steps.findIndex(s=>s.id===capturedStepId2):-1;
+    if(sIdx2>=0){
+      const currentStep=manuals[mIdx2].steps[sIdx2];
+      currentStep.attachments = [...(currentStep.attachments||[]), attachment];
+      currentStep.status = 'done';
+      renderStepsList();
+      const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+      renderDetailInto(container, sIdx2);
+    }
     showToast('ファイルを添付しました ✓');
   } catch(e) {
     showToast('アップロードエラー: '+e.message);
   }
-  input.value='';
 }
 
 async function deleteAttachment(idx, attachIdx){
   if(!confirm('この添付ファイルを削除しますか？')) return;
+  if(curM==null||!manuals[curM]?.steps[idx]){ showToast('工程が見つかりません'); return; }
   const step = manuals[curM].steps[idx];
-  const attachments = [...(step.attachments||[])];
+  const capturedMId = curMId;
+  const capturedStepId = step.id;
+  const a = (step.attachments||[])[attachIdx];
+  if(!a){ showToast('添付ファイルが見つかりません'); return; }
   // Storageからも削除（pathがない旧データはURLから参照）
-  const a = attachments[attachIdx];
   try {
     const ref = a.path ? storage.ref(a.path) : (a.url ? storage.refFromURL(a.url) : null);
     if(ref) await ref.delete();
   } catch(e){}
-  attachments.splice(attachIdx, 1);
-  await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({ attachments });
-  manuals[curM].steps[idx].attachments = attachments;
-  const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
-  renderDetailInto(container, idx);
+  // arrayRemoveは値一致で削除するため、awaitの間にcurM/curMIdが変化していても安全
+  await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId).update({
+    attachments: firebase.firestore.FieldValue.arrayRemove(a)
+  });
+  const mIdx=manuals.findIndex(m=>m.id===capturedMId);
+  const sIdx=mIdx>=0?manuals[mIdx].steps.findIndex(s=>s.id===capturedStepId):-1;
+  if(sIdx>=0){
+    const attachments=[...(manuals[mIdx].steps[sIdx].attachments||[])];
+    attachments.splice(attachIdx, 1);
+    manuals[mIdx].steps[sIdx].attachments = attachments;
+    if(curMId===capturedMId){
+      const container = isMobile()?document.getElementById('mob-detail'):document.getElementById('pc-detail');
+      renderDetailInto(container, sIdx);
+    }
+  }
   showToast('添付ファイルを削除しました');
+}
+
+function toggleVideoMute(videoId, btnId){
+  const v=document.getElementById(videoId);
+  const btn=document.getElementById(btnId);
+  if(!v||!btn) return;
+  v.muted=!v.muted;
+  btn.textContent=v.muted?'🔇 ミュート解除':'🔊 ミュート';
 }
 
 function playStepVideo(idx){
@@ -3117,11 +3381,12 @@ function playStepVideo(idx){
   const wrap=document.getElementById('vplayer-wrap-'+idx);
   const player=document.getElementById('vplayer-'+idx);
   if(!player) return;
-  if(!player.src&&!manuals[curM].steps[idx].videoUrl){
-    showToast('動画データがありません');return;
-  }
-  if(!player.src) player.src=manuals[curM].steps[idx].videoUrl;
-  thumb.style.display='none';
+  const step=manuals[curM]?.steps[idx];
+  const url=step?.videoUrl||pendingStepVideos.get(step?.id)||null;
+  if(!url){ showToast('動画データがありません'); return; }
+  // 常に最新URLをセット（撮り直し後も正しい動画を再生）
+  player.src=url;
+  if(thumb) thumb.style.display='none';
   if(wrap) wrap.style.display='flex';
   else player.style.display='block';
   player.play();
@@ -3144,40 +3409,49 @@ async function moveStep(idx,dir){
 }
 
 async function deleteStep(idx){
+  if(curM==null||!manuals[curM]?.steps[idx]){showToast('工程が見つかりません');return;}
   if(!confirm('この工程を削除しますか？\n動画・添付ファイルも削除されます。')) return;
   const step = manuals[curM].steps[idx];
+  const capturedMId = curMId;
+  const capturedStepId = step.id;
   try{
-    // Storageファイルを削除（動画・添付ファイル）
-    const dels=[];
+    // Storageファイルを削除（エラーは無視してFirestore削除を続行）
     if(step.videoUrl){
-      try{ dels.push(storage.refFromURL(step.videoUrl).delete().catch(()=>{})); }catch(e){}
+      try{ await storage.refFromURL(step.videoUrl).delete(); }catch(e){ console.warn('Storage動画削除失敗:',e.code); }
     }
-    (step.attachments||[]).forEach(a=>{
+    for(const a of (step.attachments||[])){
       try{
         const ref=a.path?storage.ref(a.path):(a.url?storage.refFromURL(a.url):null);
-        if(ref) dels.push(ref.delete().catch(()=>{}));
-      }catch(e){}
-    });
-    await Promise.all(dels);
-    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).delete();
-    manuals[curM].steps.splice(idx,1);
-    curS=null; curSId=null;
-    renderStepsList();
-    const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
-    if(!isMobile()) document.getElementById('pc-detail').innerHTML=emptyHtml;
-    if(isMobile()) showScreen('steps');
+        if(ref) await ref.delete();
+      }catch(e){ console.warn('Storage添付削除失敗:',e.code); }
+    }
+    await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId).delete();
+    // awaitの間にcurM/manualsが変化している可能性があるためIDで再探索
+    const mIdx=manuals.findIndex(m=>m.id===capturedMId);
+    if(mIdx>=0){
+      const sIdx=manuals[mIdx].steps.findIndex(s=>s.id===capturedStepId);
+      if(sIdx>=0) manuals[mIdx].steps.splice(sIdx,1);
+    }
+    if(curMId===capturedMId){
+      curS=null; curSId=null;
+      renderStepsList();
+      const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
+      if(!isMobile()) document.getElementById('pc-detail').innerHTML=emptyHtml;
+      if(isMobile()) showScreen('steps');
+    }
     showToast('工程を削除しました');
   }catch(e){showToast('エラー: '+e.message);}
 }
 
-// 全工程をまとめて削除（マニュアル自体は残す）
+// 全工程とマニュアル自体を削除
 async function deleteAllSteps(){
   const m=manuals[curM];
   if(!m||!m.steps.length){showToast('削除する工程がありません');return;}
-  if(!confirm(`「${m.name}」の全${m.steps.length}工程を削除しますか？\n動画・添付ファイルも含めてすべて削除されます。`)) return;
+  if(!confirm(`「${m.name}」の全${m.steps.length}工程とマニュアルを削除しますか？\n動画・添付ファイルも含めてすべて削除されます。`)) return;
   showToast('削除中...');
+  const capturedMId = curMId;
   try{
-    const stepsSnap=await db.collection('manuals').doc(curMId).collection('steps').get();
+    const stepsSnap=await db.collection('manuals').doc(capturedMId).collection('steps').get();
     await deleteStepsStorage(stepsSnap.docs);
     const CHUNK=499;
     const docs=stepsSnap.docs;
@@ -3186,13 +3460,16 @@ async function deleteAllSteps(){
       docs.slice(i,i+CHUNK).forEach(s=>batch.delete(s.ref));
       await batch.commit();
     }
-    manuals[curM].steps=[];
-    curS=null; curSId=null;
-    hideSheet('sheet-edit-manual');
-    renderStepsList();
-    const emptyHtml='<div class="sd-empty"><div style="font-size:46px;opacity:.18">🎥</div><div style="font-size:13px">工程を選択してください</div></div>';
-    if(!isMobile()) document.getElementById('pc-detail').innerHTML=emptyHtml;
-    showToast('全工程を削除しました');
+    await db.collection('manuals').doc(capturedMId).delete();
+    // manuals配列・curM/curMIdの同期はlistenManualsのonSnapshotに任せる
+    // （ここで手動spliceすると、リスナーが既に再構築した配列と競合し得るため）
+    if(curMId===capturedMId){
+      if(unsubSteps){ unsubSteps(); unsubSteps=null; }
+      curM=null; curMId=null; curS=null; curSId=null;
+      hideSheet('sheet-edit-manual');
+      goHome();
+    }
+    showToast('マニュアルを削除しました');
   }catch(e){showToast('エラー: '+e.message);}
 }
 
@@ -3203,13 +3480,80 @@ let torchOn=false;
 
 // バックグラウンドアップロード管理
 let bgUploadTask=null;
-let bgUploadPromise=null; // ★ URL取得まで含むPromise（Race Condition対策）
+let bgAbortCtrl=null;
+let bgUploadPromise=null;
 let bgUploadUrl=null;
 let bgUploadDone=false;
+// 録画blobのローカルURL（アップロード完了前に工程詳細で即時再生するため）
+const pendingStepVideos=new Map(); // stepId → objectUrl（複数工程分を保持）
 
 function resetBgUpload(){
-  bgUploadTask=null; bgUploadPromise=null;
+  bgUploadTask=null; bgAbortCtrl=null; bgUploadPromise=null;
   bgUploadUrl=null; bgUploadDone=false;
+}
+
+// fetch API を使って Firebase Storage REST API に直接アップロード（SDK の XHR 問題を回避）
+async function uploadBlobViaFetch(blob, storagePath, mimeType, onProgress, signal){
+  const bucket='fieldmanual-app.firebasestorage.app';
+  const user=firebase.auth().currentUser;
+  if(!user) throw Object.assign(new Error('未ログイン'),{code:'storage/unauthenticated'});
+  const token=await user.getIdToken();
+  const encodedName=encodeURIComponent(storagePath);
+  onProgress&&onProgress(0);
+
+  // 5MB 以下: simple upload / それ以上: resumable upload
+  if(blob.size <= 5*1024*1024){
+    const resp=await fetch(
+      `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?uploadType=media&name=${encodedName}`,
+      {method:'POST', headers:{'Authorization':'Firebase '+token,'Content-Type':mimeType}, body:blob, ...(signal?{signal}:{})}
+    );
+    if(!resp.ok){ const t=await resp.text().catch(()=>''); throw Object.assign(new Error(`HTTP ${resp.status}: ${t}`),{code:`storage/http-${resp.status}`}); }
+    onProgress&&onProgress(100);
+    // レスポンスJSONにdownloadTokensがあればそれを使い、なければSDKで取得
+    let downloadUrl=null;
+    try{
+      const data=await resp.json();
+      if(data.downloadTokens) downloadUrl=`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodedName}?alt=media&token=${data.downloadTokens}`;
+    }catch(e){}
+    if(!downloadUrl) downloadUrl=await storage.ref(storagePath).getDownloadURL();
+    return downloadUrl;
+  }
+
+  // resumable upload (大容量)
+  const initResp=await fetch(
+    `https://firebasestorage.googleapis.com/v0/b/${bucket}/o?uploadType=resumable&name=${encodedName}`,
+    {method:'POST', headers:{'Authorization':'Firebase '+token,'Content-Type':'application/json','X-Goog-Upload-Protocol':'resumable','X-Goog-Upload-Command':'start',
+      'X-Goog-Upload-Header-Content-Length':String(blob.size),'X-Goog-Upload-Header-Content-Type':mimeType},
+     body:JSON.stringify({name:storagePath,contentType:mimeType}), ...(signal?{signal}:{})}
+  );
+  if(!initResp.ok){ const t=await initResp.text().catch(()=>''); throw Object.assign(new Error(`Resumable init HTTP ${initResp.status}: ${t}`),{code:`storage/http-${initResp.status}`}); }
+  const uploadUrl=initResp.headers.get('X-Goog-Upload-URL')||initResp.headers.get('location');
+  if(!uploadUrl) throw Object.assign(new Error('Upload URL が取得できません'),{code:'storage/unknown'});
+
+  const CHUNK=5*1024*1024;
+  let offset=0;
+  let downloadUrl=null;
+  while(offset<blob.size){
+    const chunk=blob.slice(offset,offset+CHUNK);
+    const isLast=(offset+chunk.size)>=blob.size;
+    const cmd=isLast?'upload, finalize':'upload';
+    const chunkResp=await fetch(uploadUrl,{method:'PUT',
+      headers:{'X-Goog-Upload-Command':cmd,'X-Goog-Upload-Offset':String(offset),'Content-Length':String(chunk.size)},
+      body:chunk, ...(signal?{signal}:{})});
+    if(!chunkResp.ok&&chunkResp.status!==308){ const t=await chunkResp.text().catch(()=>''); throw Object.assign(new Error(`Chunk HTTP ${chunkResp.status}: ${t}`),{code:`storage/http-${chunkResp.status}`}); }
+    offset+=chunk.size;
+    onProgress&&onProgress(Math.round(offset/blob.size*100));
+    if(isLast){
+      const data=await chunkResp.json().catch(()=>({}));
+      if(data.downloadTokens){
+        downloadUrl=`https://firebasestorage.googleapis.com/v0/b/${encodeURIComponent(bucket)}/o/${encodedName}?alt=media&token=${data.downloadTokens}`;
+      } else {
+        downloadUrl=await storage.ref(storagePath).getDownloadURL();
+      }
+    }
+  }
+  if(!downloadUrl) throw Object.assign(new Error('ダウンロードURL取得失敗'),{code:'storage/unknown'});
+  return downloadUrl;
 }
 
 function startBgUpload(blob){
@@ -3219,7 +3563,6 @@ function startBgUpload(blob){
   const baseMime=(blob.type||'video/webm').split(';')[0].trim();
   const ext=baseMime.includes('mp4')?'mp4':'webm';
   const path=`videos/${curMId}/${step.id}/recording.${ext}`;
-  bgUploadTask=storage.ref(path).put(blob,{contentType:baseMime});
 
   const prog=document.getElementById('upload-prog');
   const fill=document.getElementById('upload-prog-fill');
@@ -3227,30 +3570,18 @@ function startBgUpload(blob){
   if(prog) prog.style.display='block';
   if(pctEl){ pctEl.style.display='block'; pctEl.textContent='アップロード中...'; }
 
-  // ★ getDownloadURL完了まで含む単一Promise
-  // → saveStep側はこれをawaitするだけでよい（完了前後どちらでも安全）
-  bgUploadPromise=new Promise((resolve, reject)=>{
-    bgUploadTask.on('state_changed',
-      snap=>{
-        const pct=Math.round(snap.bytesTransferred/snap.totalBytes*100);
-        if(fill) fill.style.width=pct+'%';
-        if(pctEl) pctEl.textContent=`アップロード中... ${pct}%`;
-      },
-      err=>reject(err),
-      async ()=>{
-        try{
-          const url=await bgUploadTask.snapshot.ref.getDownloadURL();
-          bgUploadUrl=url; bgUploadDone=true; recordedBlob=null;
-          if(fill) fill.style.width='100%';
-          if(pctEl) pctEl.textContent='✓ アップロード完了';
-          setTimeout(()=>{
-            if(prog) prog.style.display='none';
-            if(pctEl) pctEl.style.display='none';
-          }, 2000);
-          resolve(url); // ← URLを返す
-        }catch(e){ reject(e); }
-      }
-    );
+  bgAbortCtrl=new AbortController();
+  bgUploadPromise=uploadBlobViaFetch(blob, path, baseMime, pct=>{
+    if(fill) fill.style.width=pct+'%';
+    if(pctEl) pctEl.textContent=pct>0?`アップロード中... ${pct}%`:'アップロード中...';
+    const sb=document.getElementById('save-step-btn');
+    if(sb&&sb.disabled) sb.textContent=`アップロード中... ${pct}%`;
+  }, bgAbortCtrl.signal).then(url=>{
+    bgUploadUrl=url; bgUploadDone=true; recordedBlob=null;
+    if(fill) fill.style.width='100%';
+    if(pctEl) pctEl.textContent='✓ アップロード完了';
+    setTimeout(()=>{ if(prog) prog.style.display='none'; if(pctEl) pctEl.style.display='none'; },2000);
+    return url;
   });
 }
 
@@ -3277,15 +3608,13 @@ async function startRec(stepIdx){
   stopStream();
 
   try {
-    // Prefer rear camera on mobile, user-facing on desktop
-    const constraints={
-      video:{
-        facingMode: facingMode,
-        width:{ideal:854, max:1280}, height:{ideal:480, max:720},
-        frameRate:{ideal:24, max:30}  // 480p: ファイルサイズ50%削減・現場用途で十分
-      },
-      audio:true
-    };
+    const conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    const net=conn?.effectiveType||'4g';
+    // 回線品質に応じて解像度・フレームレートを調整
+    const vRes= net==='slow-2g'||net==='2g' ? {width:{ideal:240,max:320},height:{ideal:180,max:240},frameRate:{ideal:8,max:10}}
+              : net==='3g'                   ? {width:{ideal:320,max:480},height:{ideal:240,max:320},frameRate:{ideal:12,max:15}}
+              :                                {width:{ideal:480,max:640},height:{ideal:360,max:480},frameRate:{ideal:15,max:20}};
+    const constraints={ video:{facingMode,...vRes}, audio:true };
     mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
     const vid=document.getElementById('rec-video');
     vid.srcObject=mediaStream;
@@ -3347,13 +3676,13 @@ function toggleRec(){
     document.getElementById('rec-timer').classList.add('show');
 
     const mime=getBestMime();
-    // ビットレートを抑えてファイルサイズを削減
-    // 標準画質: 映像2Mbps + 音声96kbps ≒ 1分あたり約15MB
-    const opts = mime ? {
-      mimeType: mime,
-      videoBitsPerSecond: 800000,   // 0.8 Mbps（480p・1分≒6MB）
-      audioBitsPerSecond: 48000     // 48 kbps
-    } : {};
+    const _conn=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+    const _net=_conn?.effectiveType||'4g';
+    const _vbps= _net==='slow-2g'||_net==='2g' ? 70000
+               : _net==='3g'                    ? 120000
+               :                                  200000; // 4G/WiFi
+    const _abps= _net==='slow-2g'||_net==='2g' ? 16000 : 24000;
+    const opts = mime ? { mimeType:mime, videoBitsPerSecond:_vbps, audioBitsPerSecond:_abps } : {};
     try{
       mediaRecorder=new MediaRecorder(mediaStream,opts);
     } catch(e){
@@ -3452,13 +3781,20 @@ function cancelRec(){
 
 function retake(){
   // バックグラウンドアップロードをキャンセル
-  if(bgUploadTask && !bgUploadDone){
-    try{ bgUploadTask.cancel(); }catch(e){}
+  if(bgAbortCtrl && !bgUploadDone){
+    try{ bgAbortCtrl.abort(); }catch(e){}
   }
-  resetBgUpload(); // bgUploadPromiseも同時にリセット
+  resetBgUpload();
+  recordedBlob=null;
+  // pendingStepVideoも解放（撮り直しなので古いblobURLは不要）
+  // 撮り直しの場合は該当工程のblobURLを解放
+  if(curS!=null){
+    const sid=manuals[curM]?.steps[curS]?.id;
+    if(sid&&pendingStepVideos.has(sid)){ try{URL.revokeObjectURL(pendingStepVideos.get(sid));}catch(e){} pendingStepVideos.delete(sid); }
+  }
   const pvVid=document.getElementById('pv-video');
-  if(pvVid.src){URL.revokeObjectURL(pvVid.src);pvVid.src='';pvVid.style.display='none';}
-  document.getElementById('pv-fallback').style.display='flex';
+  if(pvVid&&pvVid.src){ try{URL.revokeObjectURL(pvVid.src);}catch(e){} pvVid.src=''; pvVid.style.display='none'; }
+  const pf=document.getElementById('pv-fallback'); if(pf) pf.style.display='flex';
   const prog=document.getElementById('upload-prog');
   const pctEl=document.getElementById('upload-pct');
   if(prog) prog.style.display='none';
@@ -3467,8 +3803,9 @@ function retake(){
 }
 
 async function saveStep(){
+  if(curM==null||!manuals[curM]){showToast('マニュアルが見つかりません');return;}
   const m=manuals[curM];
-  const step=m.steps[curS];
+  const step=m?.steps[curS];
   if(!step){showToast('工程が見つかりません');return;}
   const dur=document.getElementById('pv-dur').textContent.replace('録画時間: ','');
   const transcript=document.getElementById('pv-tx').textContent.trim();
@@ -3479,57 +3816,109 @@ async function saveStep(){
   const progFill=document.getElementById('upload-prog-fill');
   const progPct=document.getElementById('upload-pct');
 
-  if(bgUploadPromise){
-    // ★ bgUploadPromiseをawaitするだけ（完了前後どちらでも安全）
-    if(bgUploadDone && bgUploadUrl){
-      // 既に完了済み → 即座に使用
-      videoUrl=bgUploadUrl;
-    } else {
-      // まだ完了していない → 完了まで待機
-      saveBtn.disabled=true; saveBtn.textContent='アップロード完了待ち...';
-      try{
-        videoUrl=await bgUploadPromise; // URLが返ってくる
-      }catch(e){
-        saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
-        if(prog) prog.style.display='none';
-        if(progPct) progPct.style.display='none';
-        alert('動画アップロードエラー:\n'+e.message);
-        return;
-      }
-    }
+  // アップロード完了を待たずに即保存・画面遷移。URLはバックグラウンドで後から更新する
+  const capturedMId = curMId;
+  const capturedStepId = step.id;
+  let pendingPromise = null;
+  let savedBlobForRetry = null;
+
+  if(bgUploadDone && bgUploadUrl){
+    // 既にアップロード完了済み → そのURLをそのまま使う
+    videoUrl = bgUploadUrl;
+    resetBgUpload();
+  } else if(bgUploadPromise){
+    // バックグラウンドアップロード進行中 → Promiseを引き継いでバックグラウンドで継続
+    // bgAbortCtrlはnullにするがabort()は呼ばない（アップロードは継続させる）
+    bgAbortCtrl=null;
+    pendingPromise = bgUploadPromise;
+    // アップロード完了前はrecordedBlobがまだ残っているためリトライ用に保持
+    savedBlobForRetry = recordedBlob;
     resetBgUpload();
   } else if(recordedBlob){
-    // フォールバック: BG uploadが開始されなかった場合
-    saveBtn.disabled=true; saveBtn.textContent='アップロード中...';
-    if(prog) prog.style.display='block';
-    if(progPct) progPct.style.display='block';
-    try{
-      const baseMime=(recordedBlob.type||'video/webm').split(';')[0].trim();
+    // フォールバック: bgUploadが開始されなかった場合はここで開始
+    savedBlobForRetry = recordedBlob;
+    recordedBlob = null;
+    const baseMime = (savedBlobForRetry.type||'video/webm').split(';')[0].trim();
+    const ext = baseMime.includes('mp4')?'mp4':'webm';
+    pendingPromise = uploadBlobViaFetch(savedBlobForRetry, `videos/${capturedMId}/${capturedStepId}/recording.${ext}`, baseMime, null);
+  }
+
+  if(pendingPromise){
+    // 録画blobのローカルURLを工程詳細で即時再生するためにセット
+    const pvVid=document.getElementById('pv-video');
+    const localObjectUrl=(pvVid?.src||'').startsWith('blob:')?pvVid.src:null;
+    if(localObjectUrl) pendingStepVideos.set(capturedStepId, localObjectUrl);
+    // リトライ用blob（recordedBlobブランチで捕捉、bgUploadPromiseブランチではnull）
+    const retryBlob = savedBlobForRetry;
+
+    // アップロード用Promise（リトライ付き）
+    function makeUploadPromise(blob){
+      const baseMime=(blob.type||'video/webm').split(';')[0].trim();
       const ext=baseMime.includes('mp4')?'mp4':'webm';
-      const uploadTask=storage.ref(`videos/${curMId}/${step.id}/recording.${ext}`)
-        .put(recordedBlob,{contentType:baseMime});
-      await new Promise((resolve,reject)=>{
-        uploadTask.on('state_changed',
-          snap=>{ if(progFill) progFill.style.width=Math.round(snap.bytesTransferred/snap.totalBytes*100)+'%'; },
-          err=>reject(err), ()=>resolve());
-      });
-      videoUrl=await uploadTask.snapshot.ref.getDownloadURL();
-      recordedBlob=null;
-    }catch(e){
-      saveBtn.disabled=false; saveBtn.textContent='この工程を保存 ✓';
-      if(prog) prog.style.display='none';
-      if(progPct) progPct.style.display='none';
-      alert('動画アップロードエラー:\n'+e.message);
-      return;
+      return uploadBlobViaFetch(blob, `videos/${capturedMId}/${capturedStepId}/recording.${ext}`, baseMime, null);
     }
-    if(prog) prog.style.display='none';
-    if(progPct) progPct.style.display='none';
+
+    // バックグラウンドでURL取得後にFirestoreを更新
+    (async ()=>{
+      let url=null;
+      let lastErr=null;
+      // 最初の試み（bgUploadPromise）
+      try{ url=await pendingPromise; }
+      catch(e0){
+        lastErr=e0;
+        const code0=e0?.code||'';
+        console.warn('動画アップロード失敗(1回目):', code0, e0?.message);
+        // storage/unknown または network-request-failed はリトライ対象
+        const retryable=code0==='storage/unknown'||code0==='storage/network-request-failed'||!code0;
+        if(retryable && retryBlob){
+          for(let attempt=1;attempt<=2;attempt++){
+            await new Promise(r=>setTimeout(r,2000*attempt));
+            console.log(`動画アップロード リトライ ${attempt}回目...`);
+            try{ url=await makeUploadPromise(retryBlob); lastErr=null; break; }
+            catch(eR){ lastErr=eR; console.warn(`リトライ${attempt}失敗:`,eR?.code,eR?.message); }
+          }
+        }
+      }
+
+      if(url){
+        try{
+          await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId)
+            .update({ videoUrl:url, updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
+          recordedBlob=null;
+        }catch(e){ console.error('Firestore更新エラー:',e); }
+        return;
+      }
+
+      // 全リトライ失敗
+      const code=lastErr?.code||'';
+      const msg=lastErr?.message||String(lastErr);
+      console.error('動画アップロード最終エラー:', code, msg, lastErr);
+      if(pendingStepVideos.has(capturedStepId)){
+        try{URL.revokeObjectURL(pendingStepVideos.get(capturedStepId));}catch(e){}
+        pendingStepVideos.delete(capturedStepId);
+      }
+      try{
+        await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId)
+          .update({ status:'todo', videoUrl:null, dur:null,
+                    updatedAt:firebase.firestore.FieldValue.serverTimestamp() });
+        const mIdx=manuals.findIndex(m=>m.id===capturedMId);
+        if(mIdx>=0){
+          const sIdx=manuals[mIdx].steps.findIndex(s=>s.id===capturedStepId);
+          if(sIdx>=0){ manuals[mIdx].steps[sIdx].status='todo'; manuals[mIdx].steps[sIdx].videoUrl=null; }
+        }
+      }catch(e2){ console.warn('ステータスリセット失敗:',e2); }
+      showToast('動画のアップロードに失敗しました。もう一度録画してください。');
+    })();
+    videoUrl = null; // 先に保存。URLはバックグラウンドで後から更新
+  } else {
+    // アップロード済みの場合はMapから削除
+    pendingStepVideos.delete(capturedStepId);
   }
   if(saveBtn) saveBtn.textContent='保存中...';
 
   // Firestoreに保存
   try{
-    await db.collection('manuals').doc(curMId).collection('steps').doc(step.id).update({
+    await db.collection('manuals').doc(capturedMId).collection('steps').doc(capturedStepId).update({
       status: 'done', dur, transcript, videoUrl,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp()
     });
@@ -3540,25 +3929,38 @@ async function saveStep(){
     return;
   }
 
-  // ローカル状態を更新
-  manuals[curM].steps[curS].status='done';
-  manuals[curM].steps[curS].dur=dur;
-  manuals[curM].steps[curS].transcript=transcript;
-  manuals[curM].steps[curS].videoUrl=videoUrl;
+  // ローカル状態を更新（awaitの間にcurSが変化している可能性があるためcapturedStepIdで再探索）
+  const _mIdx=manuals.findIndex(m=>m.id===capturedMId);
+  const _sIdx=_mIdx>=0?manuals[_mIdx].steps.findIndex(s=>s.id===capturedStepId):-1;
+  if(_sIdx>=0){
+    manuals[_mIdx].steps[_sIdx].status='done';
+    manuals[_mIdx].steps[_sIdx].dur=dur;
+    manuals[_mIdx].steps[_sIdx].transcript=transcript;
+    manuals[_mIdx].steps[_sIdx].videoUrl=videoUrl;
+    // curMとcurSも整合させる
+    curM=_mIdx; curS=_sIdx;
+  }
 
   // ★ 保存成功後は必ずボタンをリセット（次の工程のために）
   if(saveBtn){ saveBtn.textContent='この工程を保存 ✓'; saveBtn.disabled=false; }
 
   showToast('「'+step.name+'」を保存しました ✓');
   const m2=manuals[curM];
-  setTB(m2.name,
-    `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👷 作業者閲覧</button>
-     <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
-     <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
-    ()=>{ if(unsubSteps){unsubSteps();unsubSteps=null;} goHome(); });
   renderStepsList();
-  if(!isMobile())renderDetailInto(document.getElementById('pc-detail'),curS);
-  showScreen('steps');
+  if(isMobile()){
+    // モバイル：保存した工程の詳細画面を表示（動画を確認できるように）
+    setTB(step.name,'',()=>openManual(curM));
+    renderDetailInto(document.getElementById('mob-detail'),curS);
+    showScreen('step-detail');
+  } else {
+    setTB(m2.name,
+      `<button class="btn btn-ghost btn-sm" onclick="openViewer()">👷 作業者閲覧</button>
+       <button class="btn btn-ghost btn-sm" onclick="openManualEdit()">✏️</button>
+       <button class="btn btn-ghost btn-sm" onclick="showSheet('sheet-step')">＋工程</button>`,
+      ()=>{ if(unsubSteps){unsubSteps();unsubSteps=null;} goHome(); });
+    renderDetailInto(document.getElementById('pc-detail'),curS);
+    showScreen('steps');
+  }
 }
 
 /* ── PUBLISH ── */
@@ -3575,7 +3977,7 @@ function openPublish(){
     r.innerHTML=`<div class="pub-row-icon">${m.icon}</div>
       <div class="pub-row-info">
         <div class="pub-row-name">STEP ${i+1}: ${s.name}</div>
-        <div class="pub-row-meta">${s.status==='done'?'✅ 動画あり · '+s.dur:'⬜ 動画未撮影'}</div>
+        <div class="pub-row-meta">${s.status==='done'?(s.contentType==='text'?'✅ テキスト保存済み':('✅ 動画あり · '+s.dur)):(s.contentType==='text'?'⬜ テキスト未入力':'⬜ 動画未撮影')}</div>
       </div>`;
     list.appendChild(r);
   });
@@ -3668,8 +4070,10 @@ async function refreshSteps(){
   const snap = await db.collection('manuals').doc(curMId)
     .collection('steps').orderBy('order','asc').get();
   const idx = manuals.findIndex(m=>m.id===curMId);
-  if(idx>=0) manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
-  renderStepsList();
+  if(idx>=0){
+    manuals[idx].steps = snap.docs.map(s=>({id:s.id,...s.data()}));
+    renderStepsList();
+  }
 }
 
 async function addStepRec(){
@@ -3678,13 +4082,21 @@ async function addStepRec(){
   const desc=document.getElementById('inp-sdesc').value.trim();
   if(!name){showToast('工程名を入力してください');return;}
   const order=manuals[curM]?.steps.length||0;
+  const textContent=(curCtype==='both')?document.getElementById('inp-text-content').value.trim()||null:null;
   try{
     const ref = await db.collection('manuals').doc(curMId).collection('steps').add({
       name, desc, status:'todo', contentType:curCtype,
-      dur:null, transcript:null, videoUrl:null, textContent:null,
+      dur:null, transcript:null, videoUrl:null, textContent,
       attachments:[], order,
       createdAt: firebase.firestore.FieldValue.serverTimestamp()
     });
+    // 「両方」タイプのとき添付ファイルもアップロード
+    if(curCtype==='both' && tempFiles.length>0){
+      const attachments=await uploadTempFiles(curMId, ref.id);
+      if(attachments.length>0){
+        await db.collection('manuals').doc(curMId).collection('steps').doc(ref.id).update({attachments});
+      }
+    }
     resetStepSheet();
     hideSheet('sheet-step');
     await refreshSteps();

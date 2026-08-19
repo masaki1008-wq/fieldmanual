@@ -1,13 +1,1 @@
-[
-  {
-    "origin": [
-      "https://fieldmanual-app.web.app",
-      "https://fieldmanual-app.firebaseapp.com",
-      "http://localhost:4173",
-      "http://localhost:8443"
-    ],
-    "method": ["GET"],
-    "responseHeader": ["Content-Type", "Content-Length"],
-    "maxAgeSeconds": 3600
-  }
-]
+[{"origin":["https://fieldmanual-app.web.app","https://fieldmanual-app.firebaseapp.com","http://localhost:4173","http://localhost:8443","https://localhost:8443"],"method":["GET","HEAD","PUT","POST","DELETE"],"responseHeader":["Content-Type","Authorization","Content-Length","X-Goog-Upload-URL","X-Goog-Upload-Command","X-Goog-Upload-Offset"],"maxAgeSeconds":3600}]

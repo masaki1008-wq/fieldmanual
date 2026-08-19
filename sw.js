@@ -1,5 +1,5 @@
 // Service Worker - 動画・添付ファイルキャッシュ
-const APP_CACHE   = 'fm-app-v5';
+const APP_CACHE   = 'fm-app-v7';
 const VIDEO_CACHE = 'fm-videos-v2';
 const FILE_CACHE  = 'fm-files-v1';
 
@@ -46,14 +46,19 @@ async function trimCache(cacheName, maxEntries){
 }
 
 self.addEventListener('fetch', e => {
+  // POST/PUT/DELETE はキャッシュ対象外（アップロードリクエストを傍受しない）
+  if(e.request.method !== 'GET') return;
+
   const url = e.request.url;
 
   // Firebase Storage の動画（録画・端末アップロードどちらも）をキャッシュ
   if(url.includes('firebasestorage.googleapis.com') && url.includes('videos%2F')){
     e.respondWith(
       caches.open(VIDEO_CACHE).then(async cache => {
-        // キャッシュキー（トークンを除いたURL）
-        const cacheKey = url.split('?')[0];
+        // キャッシュキーはトークン込みの完全なURL。撮り直しでファイルが上書きされると
+        // Firebaseが新しいdownloadTokenを発行するため、トークンを含めることで
+        // 古いキャッシュと衝突せず撮り直し後の動画が正しく取得される
+        const cacheKey = url;
         const cached = await cache.match(cacheKey);
         if(cached){
           return cached; // キャッシュから即返す

@@ -27,12 +27,48 @@ const MIME = {
   '.woff': 'font/woff',
 };
 
+// ── Live Reload（開発用: index.html/sw.js等を保存すると接続中のブラウザを自動リロード）──
+const liveReloadClients = new Set();
+let liveReloadTimer = null;
+function notifyLiveReload() {
+  clearTimeout(liveReloadTimer);
+  // 短時間の連続保存（エディタの複数回書き込み等）をまとめて1回のリロードにする
+  liveReloadTimer = setTimeout(() => {
+    for (const res of liveReloadClients) {
+      try { res.write('data: reload\n\n'); } catch (e) {}
+    }
+  }, 150);
+}
+try {
+  fs.watch(PUBLIC_DIR, (eventType, filename) => {
+    if (filename && /\.(html|js|css)$/i.test(filename)) notifyLiveReload();
+  });
+} catch (e) {
+  console.warn('Live Reload: ファイル監視を開始できませんでした:', e.message);
+}
+
 // ── Request handler ─────────────────────────────────────────────────────────
 function handler(req, res) {
   // Security: block path traversal
-  const safePath = path.normalize(req.url.split('?')[0]);
+  // URLパスは常にPOSIX形式（/区切り）なのでpath.posixで正規化する。
+  // 素のpath.normalize()はWindows上で'/'を'\'に変換してしまい、
+  // 以降の safePath==='/' 等の一致判定が壊れるため使わない。
+  const safePath = path.posix.normalize(req.url.split('?')[0]);
   if (safePath.includes('..')) {
     res.writeHead(400); res.end('Bad Request'); return;
+  }
+
+  // Live Reload用SSEエンドポイント（開発時のみ使用。本番のFirebase Hostingには存在しない）
+  if (safePath === '/livereload') {
+    res.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+    res.write('\n');
+    liveReloadClients.add(res);
+    req.on('close', () => liveReloadClients.delete(res));
+    return;
   }
 
   // Serve index.html for root
@@ -94,6 +130,8 @@ httpsServer.listen(PORT, '0.0.0.0', () => {
   console.log('');
   console.log('  ⚠️  初回アクセス時に「安全でない接続」の警告が出ます。');
   console.log('     詳細 → このサイトにアクセスする でスキップできます。');
+  console.log('');
+  console.log('  🔄 Live Reload 有効: ファイル保存で開いているブラウザが自動更新されます');
   console.log('');
   console.log('  停止するには Ctrl+C を押してください');
   console.log('========================================\n');
